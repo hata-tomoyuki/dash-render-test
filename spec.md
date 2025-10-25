@@ -19,12 +19,14 @@
   - styles.css # デザイン調整用 CSS
 - data/ # 一時保存用のデータ(JSON や SQLite)
   - products.json # 登録されたグッズ情報
-- requirements.txt # 使用ライブラリ一覧
+- apt.txt # 使用ライブラリ一覧（OS レベル）
+- requirements.txt # 使用ライブラリ一覧（Python レベル）
 - .env # API キーなどの環境変数テンプレート
 - README.md # プロジェクト説明・使い方・構成
 - Cursor.md # Cursor が修正した内容説明
 - spec.md # Cursor に伝えるようの仕様書
 - .gitignore
+- Procfile # Render に起動方法を伝える
 
 # 使用技術
 
@@ -77,3 +79,40 @@
     - 利用規約
     - データを全て削除
     - 退会
+
+# エラー対策
+
+## エラー 1 個目
+
+pyzbar が依存する zbar を Render にインストールさせるため、プロジェクト直下に apt.txt を作成して以下を記載します：
+
+```
+libzbar0
+libzbar-dev
+```
+
+## エラー 2 個目
+
+Flask Dash は内部で Flask を使っていますが、Render での依存解決を安定させるために明示的に書いておくと安心です。
+
+gunicorn Render は本番環境で python app.py ではなく WSGI サーバーを使うのが推奨です。 → gunicorn app:app のように起動することで安定稼働します。
+
+Procfile の基本
+ファイル名は必ず Procfile（拡張子なし）
+
+アプリのルートディレクトリに置く必要があります
+
+中身は「プロセスタイプ: 実行コマンド」という形式で書きます
+
+例（Dash アプリの場合）：
+
+コード
+web: gunicorn app:server
+✅ どういう意味？
+web: → 「Web サーバーとして動かすプロセス」という意味。外部からの HTTP リクエストを受け付けるのはこのプロセスだけです。
+
+gunicorn app:server → gunicorn という本番用 WSGI サーバーを使って、app.py 内の server という Flask インスタンスを起動する、という指示。 Dash アプリでは通常こう書きます：
+
+python
+app = dash.Dash(**name**)
+server = app.server # ← これを定義しておく

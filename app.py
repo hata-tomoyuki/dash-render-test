@@ -67,6 +67,7 @@ app = dash.Dash(
         }
     ],
 )
+server = app.server
 
 app.title = "写真管理アプリ"
 app.layout = create_app_layout()

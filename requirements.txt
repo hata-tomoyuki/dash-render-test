@@ -1,6 +1,8 @@
 dash
-Dash-Bootstrap-Components
+dash-bootstrap-components
 python-dotenv
 supabase
 Pillow
 pyzbar
+Flask
+gunicorn
