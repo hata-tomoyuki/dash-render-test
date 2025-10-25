@@ -1,0 +1,6 @@
+dash
+Dash-Bootstrap-Components
+python-dotenv
+supabase
+Pillow
+pyzbar
