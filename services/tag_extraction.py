@@ -2,9 +2,11 @@
 
 import json
 import os
+import time
 from typing import Any, Dict, Iterable, List, Optional
 
 import requests
+from retrying import retry
 
 IO_API_URL = os.getenv(
     "IO_INTELLIGENCE_API_URL",
@@ -12,7 +14,7 @@ IO_API_URL = os.getenv(
 )
 IO_API_KEY = os.getenv("IOINTELLIGENCE_API_KEY")
 IO_MODEL = os.getenv("IO_INTELLIGENCE_MODEL", "openai/gpt-oss-120b")
-IO_TIMEOUT = int(os.getenv("IO_INTELLIGENCE_TIMEOUT", "30"))
+IO_TIMEOUT = int(os.getenv("IO_INTELLIGENCE_TIMEOUT", "10"))
 DEFAULT_TAG_COUNT = 10
 
 
@@ -104,6 +106,8 @@ def extract_tags(
         f"# 画像説明\n{description_block}\n\n"
         f"# 指示\n{instructions}"
     )
+    prompt_length = len(prompt)
+    print(f"IO API extract_tags: prompt length = {prompt_length} characters")
 
     payload = {
         "model": IO_MODEL,
@@ -122,11 +126,24 @@ def extract_tags(
         "Content-Type": "application/json",
     }
 
-    try:
+    @retry(
+        stop_max_attempt_number=3,
+        wait_fixed=2000,
+        retry_on_exception=lambda exc: isinstance(exc, requests.RequestException),
+    )
+    def _call_api():
+        print(f"IO API extract_tags: sending request with timeout={IO_TIMEOUT}s")
+        start_time = time.time()
         response = requests.post(
             IO_API_URL, headers=headers, json=payload, timeout=IO_TIMEOUT
         )
         response.raise_for_status()
+        elapsed = time.time() - start_time
+        print(f"IO API extract_tags: response received in {elapsed:.2f}s")
+        return response
+
+    try:
+        response = _call_api()
     except requests.RequestException as exc:  # pragma: no cover - ネットワーク依存
         return {
             "status": "error",

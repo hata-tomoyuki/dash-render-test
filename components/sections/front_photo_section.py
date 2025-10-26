@@ -49,7 +49,7 @@ def render_front_photo_section() -> html.Div:
                             html.Button(
                                 "📸 撮影",
                                 id="front-camera-capture",
-                                className="btn-custom",
+                                className="btn btn-primary",
                                 **{
                                     "data-camera-group": "front",
                                     "data-camera-role": "capture",
@@ -60,7 +60,7 @@ def render_front_photo_section() -> html.Div:
                             html.Button(
                                 "❌ キャンセル",
                                 id="front-camera-cancel",
-                                className="btn-secondary",
+                                className="btn btn-outline-secondary",
                                 **{
                                     "data-camera-group": "front",
                                     "data-camera-role": "cancel",
@@ -105,12 +105,7 @@ def render_front_photo_section() -> html.Div:
                 [
                     html.Label(
                         "一言メモ (任意)",
-                        style={
-                            "color": "#666",
-                            "fontWeight": "600",
-                            "display": "block",
-                            "marginBottom": "5px",
-                        },
+                        className="form-label fw-semibold text-secondary",
                     ),
                     dcc.Input(
                         id="front-photo-note",
@@ -126,7 +121,7 @@ def render_front_photo_section() -> html.Div:
                     html.Button(
                         "正面写真をスキップ",
                         id="front-skip-button",
-                        className="btn-secondary",
+                        className="btn btn-outline-secondary",
                     ),
                 ],
                 className="step-actions",

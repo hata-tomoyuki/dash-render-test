@@ -51,7 +51,7 @@ def render_barcode_section() -> html.Div:
                             html.Button(
                                 "📸 撮影",
                                 id="barcode-camera-capture",
-                                className="btn-custom",
+                                className="btn btn-primary",
                                 **{
                                     "data-camera-group": "barcode",
                                     "data-camera-role": "capture",
@@ -62,7 +62,7 @@ def render_barcode_section() -> html.Div:
                             html.Button(
                                 "❌ キャンセル",
                                 id="barcode-camera-cancel",
-                                className="btn-secondary",
+                                className="btn btn-outline-secondary",
                                 **{
                                     "data-camera-group": "barcode",
                                     "data-camera-role": "cancel",
@@ -123,7 +123,7 @@ def render_barcode_section() -> html.Div:
                             html.Button(
                                 "番号を登録",
                                 id="barcode-manual-submit",
-                                className="btn-custom",
+                                className="btn btn-primary",
                             ),
                         ],
                         className="manual-input-group",
@@ -131,7 +131,7 @@ def render_barcode_section() -> html.Div:
                     html.Button(
                         "情報を全て手動入力する",
                         id="barcode-manual-mode",
-                        className="btn-link",
+                        className="btn btn-link",
                     ),
                 ],
                 className="card-custom",
@@ -141,12 +141,12 @@ def render_barcode_section() -> html.Div:
                     html.Button(
                         "もう一度挑戦する",
                         id="barcode-retry-button",
-                        className="btn-secondary",
+                        className="btn btn-outline-secondary",
                     ),
                     html.Button(
                         "バーコードをスキップ",
                         id="barcode-skip-button",
-                        className="btn-secondary",
+                        className="btn btn-outline-secondary",
                     ),
                 ],
                 className="step-actions",

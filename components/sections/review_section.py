@@ -6,51 +6,52 @@ def render_review_section() -> html.Div:
         [
             html.Div(
                 [
-                    html.H3("タグを微調整", className="section-subtitle"),
+                    html.H3("タグを微調整", className="card-title"),
                     html.P(
                         "自動生成されたタグにチェックを付け直せます。不要なタグは外し、必要なタグは追加してください。",
-                        className="section-description",
+                        className="card-text",
                     ),
-                    dcc.Checklist(id="tag-checklist", className="tag-checklist"),
+                    dcc.Checklist(id="tag-checklist", className="form-check"),
                     html.Div(
                         [
                             dcc.Input(
                                 id="custom-tag-input",
                                 type="text",
                                 placeholder="タグを追加 (例: イベント名)",
-                                className="input-custom",
+                                className="form-control",
                             ),
                             html.Button(
                                 "タグを追加",
                                 id="add-tag-button",
-                                className="btn-secondary",
+                                className="btn btn-secondary ms-2",
                             ),
                         ],
-                        className="manual-input-group",
+                        className="input-group mb-3",
                     ),
                 ],
-                className="card-custom",
+                className="card bg-primary text-white mb-3",
             ),
             html.Div(
                 [
-                    html.H3("メモ / 特記事項", className="section-subtitle"),
+                    html.H3("メモ / 特記事項", className="card-title"),
                     dcc.Textarea(
                         id="note-editor",
-                        className="textarea-custom",
+                        className="form-control",
                         placeholder="タグに補足したい情報や保管場所などを入力できます。",
+                        style={"minHeight": "120px"},
                     ),
                 ],
-                className="card-custom",
+                className="card bg-primary text-white mb-3",
             ),
-            html.Div(id="review-summary", className="card-custom"),
+            html.Div(id="review-summary", className="card bg-info text-white mb-3"),
             html.Div(
                 html.Button(
                     "保存して登録を完了",
                     id="save-button",
-                    className="btn-custom",
+                    className="btn btn-primary",
                     disabled=True,
                 ),
-                className="card-custom",
+                className="card bg-primary text-white mb-3 p-3",
             ),
         ]
     )

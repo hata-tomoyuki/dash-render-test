@@ -9,7 +9,7 @@ def render_home(total_photos: int, unique_barcodes: int) -> html.Div:
                     html.H1("📷 写真管理"),
                     html.P(
                         "バーコードで写真を管理",
-                        style={"color": "#999", "margin": "0"},
+                        className="text-muted mb-0",
                     ),
                 ],
                 className="header",
@@ -18,64 +18,74 @@ def render_home(total_photos: int, unique_barcodes: int) -> html.Div:
                 [
                     html.H3(
                         "ようこそ",
-                        style={"color": "#ff85b3", "marginBottom": "15px"},
+                        className="card-title",
                     ),
                     html.P(
                         "バーコードをスキャンして写真を簡単に管理できます。",
-                        style={"color": "#666", "lineHeight": "1.6"},
+                        className="card-text",
                     ),
                 ],
-                className="card-custom",
+                className="card bg-primary text-white mb-3",
             ),
             html.Div(
                 [
                     html.Div(
                         [
-                            html.Div(str(total_photos), className="stat-number"),
-                            html.Div("登録済み写真", className="stat-label"),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        str(total_photos), className="stat-number"
+                                    ),
+                                    html.Div("登録済み写真", className="stat-label"),
+                                ],
+                                className="stat-box",
+                            ),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        str(unique_barcodes), className="stat-number"
+                                    ),
+                                    html.Div(
+                                        "ユニークなバーコード", className="stat-label"
+                                    ),
+                                ],
+                                className="stat-box",
+                            ),
                         ],
-                        className="stat-box",
-                    ),
-                    html.Div(
-                        [
-                            html.Div(str(unique_barcodes), className="stat-number"),
-                            html.Div("ユニークなバーコード", className="stat-label"),
-                        ],
-                        className="stat-box",
+                        className="d-flex justify-content-around gap-3 mb-4",
                     ),
                 ],
-                className="stats-container",
+                className="card bg-light p-3",
             ),
             html.Div(
                 [
                     html.H4(
                         "使い方",
-                        style={"color": "#ff85b3", "marginBottom": "15px"},
+                        className="card-title",
                     ),
                     html.Ol(
                         [
                             html.Li(
                                 "「写真を登録」から写真をアップロード",
-                                style={"marginBottom": "10px"},
+                                className="mb-2",
                             ),
                             html.Li(
                                 "写真からバーコードを自動検出",
-                                style={"marginBottom": "10px"},
+                                className="mb-2",
                             ),
                             html.Li(
                                 "説明を追加して保存",
-                                style={"marginBottom": "10px"},
+                                className="mb-2",
                             ),
                             html.Li(
                                 "「写真一覧」で確認",
-                                style={"marginBottom": "10px"},
+                                className="mb-2",
                             ),
                         ],
-                        style={"color": "#666", "paddingLeft": "20px"},
+                        className="card-text ps-3",
                     ),
                 ],
-                className="card-custom",
-                style={"marginTop": "20px"},
+                className="card bg-primary text-white mb-3 mt-3",
             ),
         ]
     )

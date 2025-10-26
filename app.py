@@ -2,11 +2,74 @@ import base64
 from typing import Any, Dict, List, Optional
 
 import dash
-import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback_context, html, no_update
 from dash.exceptions import PreventUpdate
 
 from components.layout import create_app_layout
+
+# In-memory storage for demo purposes when Supabase is not available
+PHOTOS_STORAGE: List[Dict[str, Any]] = []
+
+# Available Bootswatch themes
+BOOTSWATCH_THEMES = [
+    "cerulean",
+    "cosmo",
+    "cyborg",
+    "darkly",
+    "flatly",
+    "journal",
+    "litera",
+    "lumen",
+    "lux",
+    "materia",
+    "minty",
+    "morph",
+    "pulse",
+    "quartz",
+    "sandstone",
+    "simplex",
+    "sketchy",
+    "slate",
+    "solar",
+    "spacelab",
+    "superhero",
+    "united",
+    "vapor",
+    "yeti",
+    "zephyr",
+]
+
+# Load/save theme
+THEME_FILE = "theme.txt"
+
+
+def load_theme() -> str:
+    try:
+        with open(THEME_FILE, "r") as f:
+            theme = f.read().strip()
+            if theme in BOOTSWATCH_THEMES:
+                return theme
+    except FileNotFoundError:
+        pass
+    return "minty"
+
+
+def save_theme_to_file(theme: str):
+    with open(THEME_FILE, "w") as f:
+        f.write(theme)
+
+
+# Current theme
+CURRENT_THEME = load_theme()
+
+
+def get_bootswatch_css(theme: str) -> str:
+    """Get Bootswatch CSS URL for the given theme."""
+    return (
+        f"https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/{theme}/bootstrap.min.css"
+    )
+
+
 from components.pages import (
     render_gallery,
     render_home,
@@ -33,13 +96,12 @@ supabase = get_supabase_client()
 
 
 def _fetch_home_metrics() -> Dict[str, int]:
-    if supabase is None:
-        return {"total": 0, "unique": 0}
     try:
-        response = supabase.table("photos").select("barcode").execute()
-        data = response.data or []
-        total = len(data)
-        unique = len({item.get("barcode") for item in data if item.get("barcode")})
+        photos = _fetch_photos()
+        total = len(photos)
+        unique = len(
+            set(photo.get("barcode") for photo in photos if photo.get("barcode"))
+        )
         return {"total": total, "unique": unique}
     except Exception:
         return {"total": 0, "unique": 0}
@@ -47,7 +109,7 @@ def _fetch_home_metrics() -> Dict[str, int]:
 
 def _fetch_photos() -> List[Dict[str, Any]]:
     if supabase is None:
-        return []
+        return PHOTOS_STORAGE.copy()  # Return in-memory storage for demo
     try:
         response = (
             supabase.table("photos")
@@ -57,11 +119,11 @@ def _fetch_photos() -> List[Dict[str, Any]]:
         )
         return response.data or []
     except Exception:
-        return []
+        return PHOTOS_STORAGE.copy()  # Fallback to in-memory storage
 
 
 def _fetch_total_photos() -> int:
-    return len(_fetch_photos()) if supabase is not None else 0
+    return len(_fetch_photos())
 
 
 def _empty_registration_state() -> Dict[str, Any]:
@@ -245,10 +307,10 @@ def _render_tags_card(tag_result: Dict[str, Any]) -> html.Div:
     if status == "loading":
         return html.Div(
             [
-                html.Div("タグを生成中です...", className="lookup-message"),
+                html.Div("タグを生成中です...", className="card-text"),
                 html.Div("⏳", className="loading-spinner"),
             ],
-            className="card-custom",
+            className="card bg-info text-white",
         )
 
     children: List[Any] = []
@@ -288,10 +350,14 @@ def _update_tags(state: Dict[str, Any]) -> Dict[str, Any]:
     return tag_result
 
 
+# Load theme and create CSS URL
+theme_css_url = get_bootswatch_css(CURRENT_THEME)
+print(f"Loading theme: {CURRENT_THEME}, CSS URL: {theme_css_url}")
+
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
     suppress_callback_exceptions=True,
+    update_title=False,
     meta_tags=[
         {
             "name": "viewport",
@@ -300,9 +366,15 @@ app = dash.Dash(
     ],
 )
 server = app.server
+app.title = "推し活グッズ管理"
 
-app.title = "写真管理アプリ"
-app.layout = create_app_layout()
+
+def serve_layout():
+    theme = load_theme()
+    return create_app_layout(get_bootswatch_css(theme))
+
+
+app.layout = serve_layout
 
 
 @app.callback(
@@ -316,25 +388,30 @@ app.layout = create_app_layout()
     Input("url", "pathname"),
 )
 def display_page(pathname: str):
-    classes = ["nav-button", "nav-button", "nav-button", "nav-button"]
+    classes = [
+        "nav-link text-white-50",
+        "nav-link text-white-50",
+        "nav-link text-white-50",
+        "nav-link text-white-50",
+    ]
 
     if pathname == "/register":
-        classes[1] = "nav-button active"
+        classes[1] = "nav-link active text-white"
         page = render_barcode_page()
     elif pathname == "/register/photo":
-        classes[1] = "nav-button active"
+        classes[1] = "nav-link active text-white"
         page = render_photo_page()
     elif pathname == "/register/review":
-        classes[1] = "nav-button active"
+        classes[1] = "nav-link active text-white"
         page = render_review_page()
     elif pathname == "/gallery":
-        classes[2] = "nav-button active"
+        classes[2] = "nav-link active text-white"
         page = render_gallery(_fetch_photos())
     elif pathname == "/settings":
-        classes[3] = "nav-button active"
-        page = render_settings(_fetch_total_photos())
+        classes[3] = "nav-link active text-white"
+        page = render_settings(_fetch_total_photos(), CURRENT_THEME)
     else:
-        classes[0] = "nav-button active"
+        classes[0] = "nav-link active text-white"
         metrics = _fetch_home_metrics()
         page = render_home(metrics["total"], metrics["unique"])
 
@@ -448,8 +525,7 @@ def handle_barcode_actions(
         if not manual_value:
             message = html.Div(
                 "バーコード番号を入力してください。",
-                className="card-custom",
-                style={"color": "#ff6b6b"},
+                className="alert alert-danger",
             )
         else:
             barcode_value = manual_value.strip()
@@ -489,7 +565,8 @@ def handle_barcode_actions(
                 "keyword": None,
             }
             message = html.Div(
-                str(exc), className="card-custom", style={"color": "#ff6b6b"}
+                str(exc),
+                className="alert alert-danger",
             )
         else:
             if not decode_result:
@@ -686,8 +763,7 @@ def handle_front_photo(
             )
             description_card = html.Div(
                 error_message,
-                className="card-custom",
-                style={"color": "#ff6b6b"},
+                className="alert alert-danger",
             )
 
         cards = [preview_card, description_card]
@@ -862,51 +938,20 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
         return (
             html.Div(
                 "バーコード情報を取得するか、スキップを選択してください。",
-                className="alert-custom",
-                style={
-                    "background": "#fff3cd",
-                    "color": "#856404",
-                    "border": "1px solid #ffeeba",
-                },
+                className="alert alert-warning",
             ),
             _serialise_state(state),
+            no_update,
         )
 
     if front_status not in {"captured", "skipped"}:
         return (
             html.Div(
                 "正面写真を撮影するか、スキップを選択してください。",
-                className="alert-custom",
-                style={
-                    "background": "#fff3cd",
-                    "color": "#856404",
-                    "border": "1px solid #ffeeba",
-                },
+                className="alert alert-warning",
             ),
             _serialise_state(state),
-        )
-
-    if supabase is None:
-        return (
-            html.Div(
-                [
-                    html.Div(
-                        "❌ データベース接続エラー",
-                        style={"fontWeight": "600", "marginBottom": "5px"},
-                    ),
-                    html.Div(
-                        ".envファイルでSupabase設定を確認してください",
-                        style={"fontSize": "12px"},
-                    ),
-                ],
-                className="alert-custom",
-                style={
-                    "background": "#f8d7da",
-                    "color": "#721c24",
-                    "border": "1px solid #f5c6cb",
-                },
-            ),
-            _serialise_state(state),
+            no_update,
         )
 
     selected_tags = selected_tags or state["tags"].get("tags") or []
@@ -914,14 +959,18 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
     try:
         image_url = ""
         if front_status == "captured" and state["front_photo"].get("content"):
-            content_string = state["front_photo"]["content"].split(",", 1)[1]
-            file_bytes = base64.b64decode(content_string)
-            image_url = upload_to_storage(
-                supabase,
-                file_bytes,
-                state["front_photo"].get("filename", "front_photo.jpg"),
-                state["front_photo"].get("content_type", "image/jpeg"),
-            )
+            if supabase is not None:
+                content_string = state["front_photo"]["content"].split(",", 1)[1]
+                file_bytes = base64.b64decode(content_string)
+                image_url = upload_to_storage(
+                    supabase,
+                    file_bytes,
+                    state["front_photo"].get("filename", "front_photo.jpg"),
+                    state["front_photo"].get("content_type", "image/jpeg"),
+                )
+            else:
+                # For demo, store data URI
+                image_url = state["front_photo"]["content"]
 
         description_text = final_note
         if selected_tags:
@@ -932,61 +981,101 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
                 else f"Tags: {tags_text}"
             )
 
-        insert_photo_record(
-            supabase,
-            state["barcode"].get("value") or "",
-            state["barcode"].get("type") or "UNKNOWN",
-            image_url or "",
-            description_text,
-        )
+        if supabase is not None:
+            insert_photo_record(
+                supabase,
+                state["barcode"].get("value") or "",
+                state["barcode"].get("type") or "UNKNOWN",
+                image_url or "",
+                description_text,
+            )
+        else:
+            # For demo, save to in-memory storage
+            import time
+
+            photo_record = {
+                "barcode": state["barcode"].get("value") or "",
+                "barcode_type": state["barcode"].get("type") or "UNKNOWN",
+                "image_url": image_url or "",
+                "description": description_text,
+                "created_at": time.time(),  # Add timestamp for ordering
+            }
+            PHOTOS_STORAGE.append(photo_record)
     except Exception as exc:  # pragma: no cover - Supabase例外ハンドリング
         return (
             html.Div(
                 [
                     html.Div(
                         "❌ 保存中にエラーが発生しました",
-                        style={"fontWeight": "600", "marginBottom": "5px"},
+                        className="alert-heading",
                     ),
-                    html.Div(str(exc), style={"fontSize": "12px"}),
+                    html.P(str(exc)),
                 ],
-                className="alert-custom",
-                style={
-                    "background": "#f8d7da",
-                    "color": "#721c24",
-                    "border": "1px solid #f5c6cb",
-                },
+                className="alert alert-danger",
             ),
             _serialise_state(state),
             no_update,
         )
 
+    print(
+        f"✅ 保存成功: barcode={state['barcode'].get('value')}, tags={selected_tags}"
+    )  # Debug log
     success_message = html.Div(
         [
             html.Div(
                 "✅ 登録が完了しました！",
-                style={"fontWeight": "600", "marginBottom": "5px"},
+                className="alert-heading",
             ),
-            html.Div(
+            html.P(
                 f"登録タグ: {', '.join(selected_tags)}"
                 if selected_tags
                 else "タグ: (なし)",
-                style={"marginBottom": "5px"},
             ),
             html.A(
                 "写真一覧を見る",
                 href="/gallery",
-                style={"color": "#ff85b3", "textDecoration": "underline"},
+                className="alert-link",
             ),
         ],
-        className="alert-custom",
-        style={
-            "background": "#d4edda",
-            "color": "#155724",
-            "border": "1px solid #c3e6cb",
-        },
+        className="alert alert-success",
     )
 
     return success_message, _serialise_state(_empty_registration_state()), "/register"
+
+
+@app.callback(
+    [
+        Output("theme-save-result", "children"),
+        Output("bootswatch-theme", "href"),
+        Output("theme-selector", "value"),
+    ],
+    Input("save-theme-button", "n_clicks"),
+    State("theme-selector", "value"),
+    prevent_initial_call=True,
+)
+def save_theme(n_clicks, selected_theme):
+    global CURRENT_THEME
+    if not n_clicks:
+        raise PreventUpdate
+
+    if selected_theme in BOOTSWATCH_THEMES:
+        CURRENT_THEME = selected_theme
+        save_theme_to_file(selected_theme)
+        new_css_url = get_bootswatch_css(selected_theme)
+        print(f"Theme changed to: {selected_theme}, new CSS: {new_css_url}")
+        message = html.Div(
+            f"✅ テーマを '{selected_theme.title()}' に変更しました。",
+            className="alert alert-success",
+        )
+        return message, new_css_url, selected_theme
+    else:
+        return (
+            html.Div(
+                "❌ 無効なテーマが選択されました。", className="alert alert-danger"
+            ),
+            no_update,
+            no_update,
+        )
 
 
 @app.callback(

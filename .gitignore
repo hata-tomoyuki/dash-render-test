@@ -21,4 +21,5 @@ dist-ssr
 *.sln
 *.sw?
 .env
+theme.txt
 __pycache__/

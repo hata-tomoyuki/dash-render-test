@@ -1,9 +1,11 @@
 """IO Intelligence API client helpers."""
 
 import os
+import time
 from typing import Any, Dict, List
 
 import requests
+from retrying import retry
 
 IO_API_URL = os.getenv(
     "IO_INTELLIGENCE_API_URL",
@@ -11,7 +13,7 @@ IO_API_URL = os.getenv(
 )
 IO_API_KEY = os.getenv("IOINTELLIGENCE_API_KEY")
 IO_MODEL = os.getenv("IO_INTELLIGENCE_MODEL", "openai/gpt-oss-120b")
-IO_TIMEOUT = int(os.getenv("IO_INTELLIGENCE_TIMEOUT", "30"))
+IO_TIMEOUT = int(os.getenv("IO_INTELLIGENCE_TIMEOUT", "10"))
 
 
 def _extract_text_from_content(content: Any) -> str:
@@ -80,11 +82,24 @@ def describe_image(image_base64: str) -> Dict[str, Any]:
         "Content-Type": "application/json",
     }
 
-    try:
+    @retry(
+        stop_max_attempt_number=3,
+        wait_fixed=2000,
+        retry_on_exception=lambda exc: isinstance(exc, requests.RequestException),
+    )
+    def _call_api():
+        print(f"IO API describe_image: sending request with timeout={IO_TIMEOUT}s")
+        start_time = time.time()
         response = requests.post(
             IO_API_URL, headers=headers, json=payload, timeout=IO_TIMEOUT
         )
         response.raise_for_status()
+        elapsed = time.time() - start_time
+        print(f"IO API describe_image: response received in {elapsed:.2f}s")
+        return response
+
+    try:
+        response = _call_api()
     except requests.RequestException as exc:  # pragma: no cover - ネットワーク依存
         return {
             "status": "error",

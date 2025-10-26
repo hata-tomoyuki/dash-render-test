@@ -13,11 +13,7 @@ def render_gallery(photos: Iterable[Photo]) -> html.Div:
             [
                 html.P(
                     "まだ写真が登録されていません",
-                    style={
-                        "color": "#999",
-                        "textAlign": "center",
-                        "marginBottom": "20px",
-                    },
+                    className="text-muted text-center mb-4",
                 )
             ]
         )
@@ -27,11 +23,7 @@ def render_gallery(photos: Iterable[Photo]) -> html.Div:
             [
                 html.P(
                     f"全 {len(photos)} 枚の写真",
-                    style={
-                        "color": "#999",
-                        "textAlign": "center",
-                        "marginBottom": "20px",
-                    },
+                    className="text-muted text-center mb-4",
                 )
             ]
         )
@@ -53,18 +45,11 @@ def render_gallery(photos: Iterable[Photo]) -> html.Div:
                                     [
                                         html.Div(
                                             f"バーコード: {photo.get('barcode', '')[:15]}...",
-                                            style={
-                                                "fontWeight": "600",
-                                                "color": "#333",
-                                                "marginBottom": "5px",
-                                            },
+                                            className="fw-bold text-dark mb-1",
                                         ),
                                         html.Div(
                                             photo.get("description") or "説明なし",
-                                            style={
-                                                "color": "#999",
-                                                "fontSize": "11px",
-                                            },
+                                            className="text-muted small",
                                         ),
                                     ],
                                     className="photo-info",

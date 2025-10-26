@@ -39,27 +39,31 @@ DEFAULT_REGISTRATION_STATE = {
 
 
 def _build_navigation():
-    return html.Div(
-        [
-            html.A(
-                [
-                    html.Div(item["icon"], className="nav-icon"),
-                    html.Div(item["label"], className="nav-label"),
-                ],
-                href=item["href"],
-                className="nav-button",
-                id=item["id"],
-            )
-            for item in NAV_ITEMS
-        ],
-        className="bottom-nav",
+    return html.Nav(
+        html.Div(
+            [
+                html.A(
+                    [
+                        html.Div(item["icon"], className="nav-icon"),
+                        html.Div(item["label"], className="nav-label"),
+                    ],
+                    href=item["href"],
+                    className="nav-link text-white-50",
+                    id=item["id"],
+                )
+                for item in NAV_ITEMS
+            ],
+            className="navbar-nav flex-row justify-content-around w-100",
+        ),
+        className="navbar navbar-dark bg-primary",
     )
 
 
-def create_app_layout():
+def create_app_layout(theme_href: str):
     """Return the root Dash layout."""
     return html.Div(
         [
+            html.Link(rel="stylesheet", href=theme_href, id="bootswatch-theme"),
             dcc.Location(id="url", refresh=False),
             html.Div(id="page-content", className="page-container"),
             _build_navigation(),
