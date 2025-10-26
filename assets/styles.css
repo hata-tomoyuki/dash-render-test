@@ -412,3 +412,14 @@ body {
     align-items: stretch;
   }
 }
+
+.loading-spinner {
+  font-size: 2rem;
+  text-align: center;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

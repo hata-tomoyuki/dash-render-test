@@ -242,6 +242,15 @@ def _render_tags_card(tag_result: Dict[str, Any]) -> html.Div:
     tags = tag_result.get("tags", [])
     message = tag_result.get("message")
 
+    if status == "loading":
+        return html.Div(
+            [
+                html.Div("タグを生成中です...", className="lookup-message"),
+                html.Div("⏳", className="loading-spinner"),
+            ],
+            className="card-custom",
+        )
+
     children: List[Any] = []
     if message:
         children.append(html.Div(message, className="lookup-message"))
@@ -352,7 +361,7 @@ def display_page(pathname: str):
         State("barcode-manual-input", "value"),
         State("registration-store", "data"),
     ],
-    prevent_initial_call=True,
+    prevent_initial_call="initial_duplicate",
 )
 def handle_barcode_actions(
     upload_contents,
@@ -545,6 +554,19 @@ def handle_barcode_actions(
     return _serialise_state(state), message, url
 
 
+@app.callback(
+    Output("registration-store", "data", allow_duplicate=True),
+    Input("registration-store", "data"),
+    prevent_initial_call="initial_duplicate",
+)
+def process_tags(store_data):
+    state = _ensure_state(store_data)
+    if state["tags"]["status"] == "loading":
+        _update_tags(state)
+        return _serialise_state(state)
+    raise PreventUpdate
+
+
 @app.callback(Output("tag-feedback", "children"), Input("registration-store", "data"))
 def render_tag_feedback(store_data):
     state = _ensure_state(store_data)
@@ -567,7 +589,7 @@ def render_tag_feedback(store_data):
         State("front-camera-upload", "filename"),
         State("registration-store", "data"),
     ],
-    prevent_initial_call=True,
+    prevent_initial_call="initial_duplicate",
 )
 def handle_front_photo(
     upload_contents,
@@ -685,7 +707,8 @@ def handle_front_photo(
 
         message = html.Div(cards)
 
-    _update_tags(state)
+    # Set loading status for tags
+    state["tags"]["status"] = "loading"
     return _serialise_state(state), message, "/register/review"
 
 
@@ -734,7 +757,7 @@ def sync_tag_checklist(store_data, current_value):
     State("custom-tag-input", "value"),
     State("tag-checklist", "value"),
     State("tag-checklist", "options"),
-    prevent_initial_call=True,
+    prevent_initial_call="initial_duplicate",
 )
 def add_custom_tag(n_clicks, tag_value, current_value, options):
     if not n_clicks or not tag_value:
@@ -818,13 +841,14 @@ def render_review_summary(selected_tags, note_text, store_data):
     [
         Output("register-alert", "children"),
         Output("registration-store", "data", allow_duplicate=True),
+        Output("url", "pathname", allow_duplicate=True),
     ],
     Input("save-button", "n_clicks"),
     State("registration-store", "data"),
     State("front-photo-note", "value"),
     State("tag-checklist", "value"),
     State("note-editor", "value"),
-    prevent_initial_call=True,
+    prevent_initial_call="initial_duplicate",
 )
 def save_registration(n_clicks, store_data, note, selected_tags, final_note):
     if not n_clicks:
@@ -933,6 +957,7 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
                 },
             ),
             _serialise_state(state),
+            no_update,
         )
 
     success_message = html.Div(
@@ -961,7 +986,7 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
         },
     )
 
-    return success_message, _serialise_state(_empty_registration_state())
+    return success_message, _serialise_state(_empty_registration_state()), "/register"
 
 
 @app.callback(
