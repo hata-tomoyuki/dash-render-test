@@ -10,7 +10,9 @@ from components.layout import create_app_layout
 from components.pages import (
     render_gallery,
     render_home,
-    render_register_page,
+    render_barcode_page,
+    render_photo_page,
+    render_review_page,
     render_settings,
 )
 from services.barcode_lookup import (
@@ -309,10 +311,13 @@ def display_page(pathname: str):
 
     if pathname == "/register":
         classes[1] = "nav-button active"
-        try:
-            page = render_register_page()
-        except Exception as e:
-            page = html.Div([html.P(f"Error rendering register page: {str(e)}")])
+        page = render_barcode_page()
+    elif pathname == "/register/photo":
+        classes[1] = "nav-button active"
+        page = render_photo_page()
+    elif pathname == "/register/review":
+        classes[1] = "nav-button active"
+        page = render_review_page()
     elif pathname == "/gallery":
         classes[2] = "nav-button active"
         page = render_gallery(_fetch_photos())
@@ -331,6 +336,7 @@ def display_page(pathname: str):
     [
         Output("registration-store", "data", allow_duplicate=True),
         Output("barcode-feedback", "children"),
+        Output("url", "pathname", allow_duplicate=True),
     ],
     [
         Input("barcode-upload", "contents"),
@@ -520,7 +526,23 @@ def handle_barcode_actions(
                 message = success_message(barcode_value, barcode_type, lookup_result)
 
     _update_tags(state)
-    return _serialise_state(state), message
+
+    if trigger_id == "barcode-skip-button":
+        url = "/register/photo"
+    elif state["lookup"]["status"] == "success":
+        url = "/register/photo"
+    else:
+        url = no_update
+        if state["barcode"]["status"] in ["captured", "error"]:
+            message = html.Div(
+                [
+                    message,
+                    html.Button("もう一度挑戦する", id="barcode-retry-button"),
+                    html.Button("スキップ", id="barcode-skip-button"),
+                ]
+            )
+
+    return _serialise_state(state), message, url
 
 
 @app.callback(Output("tag-feedback", "children"), Input("registration-store", "data"))
@@ -533,6 +555,7 @@ def render_tag_feedback(store_data):
     [
         Output("registration-store", "data", allow_duplicate=True),
         Output("front-feedback", "children"),
+        Output("url", "pathname", allow_duplicate=True),
     ],
     [
         Input("front-upload", "contents"),
@@ -663,7 +686,7 @@ def handle_front_photo(
         message = html.Div(cards)
 
     _update_tags(state)
-    return _serialise_state(state), message
+    return _serialise_state(state), message, "/register/review"
 
 
 @app.callback(Output("save-button", "disabled"), Input("registration-store", "data"))
