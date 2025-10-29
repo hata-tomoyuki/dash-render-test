@@ -23,3 +23,7 @@ dist-ssr
 .env
 theme.txt
 __pycache__/
+venv/
+.venv/
+env/
+.env

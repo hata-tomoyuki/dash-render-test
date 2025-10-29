@@ -22,7 +22,7 @@
 - assets/ # CSS や画像などの静的ファイル
   - styles.css # デザイン調整用 CSS
 - data/ # 一時保存用のデータ(JSON や SQLite)
-  - products.json # 登録されたグッズ情報
+  - registration_product_information.json # 登録されたグッズ情報
 - apt.txt # 使用ライブラリ一覧（OS レベル）
 - requirements.txt # 使用ライブラリ一覧（Python レベル）
 - .env # API キーなどの環境変数テンプレート
@@ -40,12 +40,16 @@
 - Python の Dash
 - 将来的にフレームワークを変更する事も視野に入れて、ロジックを関数化する
 - 公開は、GitHub にあげて、Render
+- データベースは、SUPABASE
+- アイコンは、Bootstrap Icons
+  - [https://icons.getbootstrap.com/#accessibility](https://icons.getbootstrap.com/#accessibility)
 
 # 機能要件
 
 - 【絶対必要】
   - スマホ画面対応
   - 推し色に合わせたカラー対応（背景とかアイコンとか）
+    - Dash のテーマを使用して、設定画面から変更可能
   - グッズ情報との照合
   - バーコード読み取り
   - 画像マッチ
@@ -89,7 +93,7 @@
 
 # 開発予定の内容
 
-## 製品登録のフロー（利用者画面では 1⇒2⇒6 の画面で進んでいきます）
+## 製品登録のフロー（利用者画面では 1⇒2⇒6(タグ付けローディング中表示含む) の画面で進んでいきます）
 
 製品は、グッズから漫画、書籍まで、何が登録されるか分かりません。 1.バーコードの読み取り or アップロード or バーコード番号の入力
 
@@ -98,27 +102,33 @@
   - 1 ページ内の表示の順番は上から、読み取り ⇒ アップロード ⇒ バーコード番号の入力の順
   - 写真の読み取り時は、撮影中のライブビューイングがあるようにしてください
   - スキップする選択肢もボタンで用意する事
+  - 読み取り or アップロード or バーコード番号の入力後、手順 2 に移行できるように自動遷移や入力確定ボタンを用意してください。
   - 情報を全て手動入力する選択肢ボタンも作成してください。
   - Output：バーコード情報を楽天 API に渡す（撮影した写真は、登録しない）
-  - IF：バーコード読み取りに失敗した場合は、「もう一度挑戦する」or「スキップ」の 2 択を選べるようにしてください。
+  - IF(失敗)：バーコード読み取りに失敗した場合は、「もう一度挑戦する」or「スキップ」の 2 択を選べるようにしてください。
+  - IF（成功)：手順 2 に自動で移行してください。
 - 手順 2.正面写真の登録（アップロード or 撮影）
   - ファイルは、関数化してください（写真の登録は、一覧に追加してからも関連写真として、追加できるようにするため、何度も使用機会があります）
   - スキップする選択肢もボタンで用意する事
   - 写真の読み取り時は、撮影中のライブビューイングがあるようにしてください。
   - この写真は、保存して、後で登録グッズの一覧画像で使用します。また、後でその写真を飾り付けたりにも使用します。
   - 最初のこの製品登録の際は、「正面写真」のみに限定します。可能な限り、アップで正面写真を撮ってもらうようにしてください。
+  - 読み取り or アップロード後、手順 6 の画面に移行できるように、入力確定ボタンを用意してください。
+  - 「もう一度挑戦する」or「スキップ」のボタンも選べるようにしてください。
 - 手順 3.上記 1 のバーコード情報を楽天 API で照合して、製品情報を抽出
   - barcode_lookup.py に該当
   - Input：上記 1 のバーコード情報
   - Output：製品情報（登録情報・タグ付けに使用）
-  - IF：失敗した場合は、利用者に知らせる通知は不要。そのまま 4 の手順に進むだけ。成功しても 4 の手順に進みます。
+  - IF(失敗)：失敗した場合は、利用者に知らせる通知は不要。そのまま 4 の手順に進むだけ。
+  - IF（成功）:成功しても 4 の手順に進みます。
 - 手順 4.上記の 2 の写真を IO Intelligence API で画像内容を説明 ⇒IF.上記 3 が失敗した場合、テキストベースで楽天 API で照合
   - image_description.py に該当
   - IO Intelligence API(Vision モデル：例 LLaVA 系)は、絶対に使用してください。
   - 参考（精度が上がるならば検討してください）：CLIP（画像 ⇒ テキスト特徴抽出：ベクトル化）、FAISS(類似検索)
   - Input：上記 2 の写真
   - Output：製品情報（登録情報・タグ付けに使用）
-  - IF：上記 3 失敗時の照合は、写真からテキスト化した情報を楽天 API 検索等からお願いします。上記 3 が成功していた場合は、写真のテキスト化のみです。
+  - IF(失敗)：上記 3 失敗時の照合は、写真からテキスト化した情報を楽天 API 検索等からお願いします。
+  - IF(成功)：上記 3 が成功していた場合は、写真のテキスト化のみです。
   - 精度向上の参考：解像度の統一・トリミング（主題を中央に配置）・ノイズ除去＆露出補正
   - Output：製品情報（登録情報・タグ付けに使用）
 - 手順 5.上記 3 の製品情報と上記 4 の製品テキスト情報からタグ抽出
@@ -127,8 +137,13 @@
   - 上記 3 と 4 の製品情報から、登録するためのタグを抽出
   - 上記 1 と 2 の両方をスキップした場合は、製品情報が無いため、手順 6 の画面に移動して、全てを利用者が入力できるようにしてください。
 - 手順 6.ユーザーによる微調整
+
+  - 上記手順 3 ～ 5 の間、Output の製品情報抽出が終わるまで、ローディング画面を表示してください。
+  - 上記手順 5 が修了していなくても、利用者が登録ボタンを押せば登録できるようにしてください。
   - 照合した結果を表示して、利用者が微調整できるようにしてください。
   - 登録ボタンを表示して、登録を実行してください。
+  - 登録完了後は、利用者に登録完了を通知する画面表示の後、最初の手順 1 の画面に戻ってください。
+
     ※注意事項：楽天 API で参照できる製品情報が理解できていないため、探索用の EDA.py を作成して、照合結果を全部表示してください。
     結果次第で、データベースの内容や登録する情報も変わります。
 
@@ -144,13 +159,208 @@ curl https://api.intelligence.io.solutions/api/v1/models
 ```
 curl https://api.intelligence.io.solutions/api/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $IOINTELLIGENCE_API_KEY" \
+  -H "Authorization: Bearer $IO_INTELLIGENCE_API_KEY" \
   -d '{
-    "model": "openai/gpt-oss-120b",
+    "model": "meta-llama/Llama-3.2-90B-Vision-Instruct",
     "messages": [{"role":"user","content":"Say this is a test"}],
     "temperature": 0.7
   }'
 ```
+
+# データベース
+
+| 役割           | 名称日本語      | メソッド名        | データ型 | キー設定    |
+| -------------- | --------------- | ----------------- | -------- | ----------- |
+| エンティティ名 | 作品シリーズ    | works_series      | 文字列   |             |
+| 属性           | 作品シリーズ ID | works_series_id   | 整数     | Primary Key |
+| 属性           | 作品シリーズ名  | works_series_name | 文字列   |             |
+
+| 役割           | 名称日本語      | メソッド名        | データ型 | キー設定    |
+| -------------- | --------------- | ----------------- | -------- | ----------- |
+| エンティティ名 | 作品情報        | works_information | 文字列   |             |
+| 属性           | 作品 ID         | works_id          | 整数     | Primary Key |
+| 属性           | 作品名          | title             | 文字列   |             |
+| 属性           | 作品シリーズ ID | works_series_id   | 整数     | Foreign Key |
+
+| 役割           | 名称日本語  | メソッド名             | データ型 | キー設定    |
+| -------------- | ----------- | ---------------------- | -------- | ----------- |
+| エンティティ名 | 版権元      | copyright_source       | 文字列   |             |
+| 属性           | 版権会社 ID | copyright_company_id   | 整数     | Primary Key |
+| 属性           | 版権会社名  | copyright_company_name | 文字列   |             |
+
+| 役割 | 名称日本語      | メソッド名      | データ型 | キー設定    |
+| ---- | --------------- | --------------- | -------- | ----------- |
+| 属性 | キャラクター ID | character_id    | 整数     | Primary Key |
+| 属性 | 作品 ID         | works_id        | 整数     | Foreign Key |
+| 属性 | 作品シリーズ ID | works_series_id | 整数     | Foreign Key |
+| 属性 | テーマ色        | theme_color     | 整数     | Foreign Key |
+| 属性 | 髪色            | hair_color      | 整数     | Foreign Key |
+| 属性 | 目の色          | eye_color       | 整数     | Foreign Key |
+| 属性 | キャラクター名  | character_name  |          |             |
+| 属性 | 愛称            | nickname        |          |             |
+| 属性 | 性別            | sex             |          |             |
+| 属性 | 人フラグ        | person_flag     |          |             |
+| 属性 | 動物フラグ      | animal_flag     |          |             |
+| 属性 | 実在フラグ      | existing_flag   |          |             |
+| 属性 | 足数            | foot_number     |          |             |
+| 属性 | 身長            | height          |          |             |
+| 属性 | 体重            | weight          |          |             |
+| 属性 | 誕生日          | birthday        |          |             |
+| 属性 | デビュー日      | debut_date      |          |             |
+| 属性 | 年齢            | age             |          |             |
+| 属性 | 学生フラグ      | student_flag    |          |             |
+
+| 役割           | 名称日本語    | メソッド名       | データ型 | キー設定    |
+| -------------- | ------------- | ---------------- | -------- | ----------- |
+| エンティティ名 | 色            | color            | 文字列   |             |
+| 属性           | 色グループ ID | color_group_id   | 整数     | Primary Key |
+| 属性           | 色グループ名  | color_group_name | 文字列   |             |
+| 属性           | 色設定        | color_preference | RGB      |             |
+
+| 役割           | 名称日本語      | メソッド名         | データ型 | キー設定    |
+| -------------- | --------------- | ------------------ | -------- | ----------- |
+| エンティティ名 | 製品種別        | product_type       | 文字列   |             |
+| 属性           | 製品グループ ID | product_group_id   | 整数     | Primary Key |
+| 属性           | 製品グループ名  | product_group_name | 文字列   |             |
+
+| 役割           | 名称日本語      | メソッド名               | データ型 | キー設定    |
+| -------------- | --------------- | ------------------------ | -------- | ----------- |
+| エンティティ名 | 製品規格サイズ  | product_regulations_size | 文字列   |             |
+| 属性           | 製品サイズ ID   | product_size_id          | 整数     | Primary Key |
+| 属性           | 製品グループ ID | product_group_id         | 整数     | Foreign Key |
+| 属性           | 製品の形        | product_type             | 文字列   |             |
+| 属性           | 製品サイズ横    | product_size_horizontal  | 整数     |             |
+| 属性           | 製品サイズ奥行  | product_size_depth       | 整数     |             |
+| 属性           | 製品サイズ縦    | product_size_vertical    | 整数     |             |
+
+| 役割           | 名称日本語                 | メソッド名                       | データ型 | キー設定    |
+| -------------- | -------------------------- | -------------------------------- | -------- | ----------- |
+| エンティティ名 | 収納場所                   | receipt_location                 | 文字列   |             |
+| 属性           | 収納場所 ID                | receipt_location_id              | 整数     | Primary Key |
+| 属性           | 収納場所名                 | receipt_location_name            | 文字列   |             |
+| 属性           | 収納場所サイズ横           | receipt_location_size_horizontal | 整数     |             |
+| 属性           | 収納場所サイズ奥行         | receipt_location_size_depth      | 整数     |             |
+| 属性           | 収納場所サイズ縦           | receipt_location_size_vertical   | 整数     |             |
+| 属性           | 1 個あたりの収納数         | receipt_count_per_1              | 整数     |             |
+| 属性           | 1 個あたりの収納サイズ横   | receipt_size_horizontal_per_1    | 整数     |             |
+| 属性           | 1 個あたりの収納サイズ奥行 | receipt_size_depth_per_1         | 整数     |             |
+| 属性           | 1 個あたりの収納サイズ縦   | receipt_size_vertical_per_1      | 整数     |             |
+| 属性           | 収納場所アイコン           | receipt_location_icon            | 文字列   |             |
+| 属性           | 収納場所使用フラグ         | receipt_location_use_flag        | 整数     |             |
+
+| 役割           | 名称日本語               | メソッド名                | データ型 | キー設定    |
+| -------------- | ------------------------ | ------------------------- | -------- | ----------- |
+| エンティティ名 | アイコンタグ             | icon_tag                  | 文字列   |             |
+| 属性           | アイコン                 | icon                      | 文字列   | Primary Key |
+| 属性           | アイコン名               | icon_name                 | 文字列   |             |
+| 属性           | カテゴリータグ使用フラグ | category_tag_use_flag     | 整数     |             |
+| 属性           | 収納場所使用フラグ       | receipt_location_use_flag | 整数     |             |
+
+| 役割           | 名称日本語        | メソッド名         | データ型       | キー設定    |
+| -------------- | ----------------- | ------------------ | -------------- | ----------- |
+| エンティティ名 | 会員情報          | member_information | 文字列         |             |
+| 属性           | 会員 ID           | members_id         | 整数           | Primary Key |
+| 属性           | 会員種別名        | members_type_name  | 文字列         | Foreign Key |
+| 属性           | ユーザ名          | user_name          | 文字列         |             |
+| 属性           | メールアドレス    | email_address      | メールアドレス |             |
+| 属性           | X_ID              | x_id               | 文字列         |             |
+| 属性           | インスタグラム ID | instagram_id       | 文字列         |             |
+| 属性           | LINE_ID           | line_id            | 文字列         |             |
+
+| 役割           | 名称日本語           | メソッド名                          | データ型 | キー設定    |
+| -------------- | -------------------- | ----------------------------------- | -------- | ----------- |
+| エンティティ名 | 会員種別             | member_type                         | 文字列   |             |
+| 属性           | 会員種別名           | members_type_name                   | 文字列   | Primary Key |
+| 属性           | サムネイル画質       | thumbnail_image_quality             | 整数     |             |
+| 属性           | 登録可能枚数         | registerable_number                 | 整数     |             |
+| 属性           | 高解像度登録可能枚数 | number_registerable_high_resolution | 整数     |             |
+
+| 役割           | 名称日本語         | メソッド名                    | データ型 | キー設定    |
+| -------------- | ------------------ | ----------------------------- | -------- | ----------- |
+| エンティティ名 | 写真               | photo                         | 文字列   |             |
+| 属性           | 写真 ID            | photo_id                      | 整数     | Primary Key |
+| 属性           | 写真のテーマ色     | photo_theme_color             | 整数     | Foreign Key |
+| 属性           | 正面フラグ         | front_flag                    | 整数     |             |
+| 属性           | 写真サムネイル     | photo_thumbnail               | 画像     |             |
+| 属性           | 写真サムネイル画質 | photo_thumbnail_image_quality | 整数     |             |
+| 属性           | 写真高解像度フラグ | photo_high_resolution_flag    | 整数     |             |
+| 属性           | 写真編集済フラグ   | photo_edited_flag             | 整数     |             |
+| 属性           | 写真登録日         | photo_registration_date       | 日付     |             |
+| 属性           | 写真編集日         | photo_edit_date               | 日付     |             |
+| 属性           | 写真サムネイル URL | photo_thumbnail_url           | URL      |             |
+| 属性           | 写真高解像度 URL   | photo_high_resolution_url     | URL      |             |
+
+| 役割           | 名称日本語    | メソッド名      | データ型 | キー設定    |
+| -------------- | ------------- | --------------- | -------- | ----------- |
+| エンティティ名 | カラータグ    | color_tag       | 文字列   |             |
+| 属性           | カラータグ ID | color_tag_id    | 整数     | Primary Key |
+| 属性           | 会員 ID       | members_id      | 整数     | Foreign Key |
+| 属性           | カラータグ色  | color_tag_color | RGB      |             |
+| 属性           | カラータグ名  | color_tag_name  | 文字列   |             |
+
+| 役割           | 名称日本語               | メソッド名            | データ型 | キー設定    |
+| -------------- | ------------------------ | --------------------- | -------- | ----------- |
+| エンティティ名 | カテゴリータグ           | category_tag          | 文字列   |             |
+| 属性           | カテゴリータグ ID        | category_tag_id       | 整数     | Primary Key |
+| 属性           | 会員 ID                  | members_id            | 整数     | Foreign Key |
+| 属性           | カテゴリータグ色         | category_tag_color    | RGB      |             |
+| 属性           | カテゴリータグ名         | category_tag_name     | 文字列   |             |
+| 属性           | カテゴリータグアイコン   | category_tag_icon     | 文字列   |             |
+| 属性           | カテゴリータグ使用フラグ | category_tag_use_flag | 整数     |             |
+
+| 役割           | 名称日本語         | メソッド名                       | データ型 | キー設定    |
+| -------------- | ------------------ | -------------------------------- | -------- | ----------- |
+| エンティティ名 | 登録製品情報       | registration_product_information | 文字列   |             |
+| 属性           | 登録製品 ID        | registration_product_id          | 整数     | Primary Key |
+| 属性           | 写真 ID            | photo_id                         | 整数     | Foreign Key |
+| 属性           | 作品シリーズ ID    | works_series_id                  | 整数     | Foreign Key |
+| 属性           | 作品 ID            | works_id                         | 整数     | Foreign Key |
+| 属性           | キャラクター ID    | character_id                     | 整数     | Foreign Key |
+| 属性           | 版権会社 ID        | copyright_company_id             | 整数     | Foreign Key |
+| 属性           | 製品グループ ID    | product_group_id                 | 整数     | Foreign Key |
+| 属性           | 製品サイズ ID      | product_size_id                  | 整数     | Foreign Key |
+| 属性           | 収納場所 ID        | receipt_location_id              | 整数     | Foreign Key |
+| 属性           | 収納場所タグ ID    | receipt_location_tag_id          | 整数     | Foreign Key |
+| 属性           | カラータグ ID      | color_tag_id                     | 整数     | Foreign Key |
+| 属性           | カテゴリータグ ID  | category_tag_id                  | 整数     | Foreign Key |
+| 属性           | キャンペーン ID    | campaign_id                      | 整数     | Foreign Key |
+| 属性           | 貨幣単位 ID        | currency_unit_id                 | 整数     | Foreign Key |
+| 属性           | 作品シリーズ名     | works_series_name                | 文字列   |             |
+| 属性           | 作品名             | title                            | 文字列   |             |
+| 属性           | キャラクター名     | character_name                   | 文字列   |             |
+| 属性           | 版権会社名         | copyright_company_name           | 文字列   |             |
+| 属性           | 製品の形           | product_type                     | 文字列   |             |
+| 属性           | 製品サイズ横       | product_size_horizontal          | 整数     |             |
+| 属性           | 製品サイズ奥行     | product_size_depth               | 整数     |             |
+| 属性           | 製品サイズ縦       | product_size_vertical            | 整数     |             |
+| 属性           | バーコード番号     | barcode_number                   |          |             |
+| 属性           | バーコードタイプ   | barcode_type                     |          |             |
+| 属性           | 製品名             | product_name                     | 文字列   |             |
+| 属性           | 定価               | list_price                       | 整数     |             |
+| 属性           | 購入価格           | purchase_price                   | 整数     |             |
+| 属性           | 登録数量           | registration_quantity            | 整数     |             |
+| 属性           | 販売希望数量       | sales_desired_quantity           | 整数     |             |
+| 属性           | 製品シリーズ数量   | product_series_quantity          | 整数     |             |
+| 属性           | 購入場所           | purchase_location                | 文字列   |             |
+| 属性           | おまけ名           | freebie_name                     | 文字列   |             |
+| 属性           | 購入日             | purchase_date                    | 日付     |             |
+| 属性           | 作成日             | creation_date                    | 日付     |             |
+| 属性           | 更新日             | updated_date                     | 日付     |             |
+| 属性           | その他タグ         | other_tag                        | 文字列   |             |
+| 属性           | メモ               | memo                             | 文字列   |             |
+| 属性           | 製品シリーズフラグ | product_series_flag              | 整数     |             |
+| 属性           | 商用製品フラグ     | commercial_product_flag          | 整数     |             |
+| 属性           | 同人製品フラグ     | personal_product_flag            | 整数     |             |
+| 属性           | デジタル製品フラグ | digital_product_flag             | 整数     |             |
+| 属性           | 販売希望フラグ     | sales_desired_flag               | 整数     |             |
+| 属性           | 欲しい物フラグ     | want_object_flag                 | 整数     |             |
+| 属性           | おまけ付きフラグ   | flag_with_freebie                | 整数     |             |
+
+| 役割           | 名称日本語  | メソッド名       | データ型 | キー設定    |
+| -------------- | ----------- | ---------------- | -------- | ----------- |
+| エンティティ名 | 貨幣単位    | currency_unit    | 文字列   |             |
+| 属性           | 貨幣単位 ID | currency_unit_id | 整数     | Primary Key |
+| 属性           | 貨幣名      | currency_name    | 文字列   |             |
 
 # エラー対策
 

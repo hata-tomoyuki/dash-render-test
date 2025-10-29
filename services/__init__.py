@@ -1,5 +1,11 @@
 from .barcode_service import decode_from_base64
-from .photo_service import delete_all_photos, insert_photo_record, upload_to_storage
+from .photo_service import (
+    delete_all_products,
+    get_all_products,
+    get_product_stats,
+    insert_product_record,
+    upload_to_storage,
+)
 from .supabase_client import get_supabase_client
 from .barcode_lookup import (
     lookup_product,
@@ -11,8 +17,10 @@ from .tag_extraction import extract_tags
 
 __all__ = [
     "decode_from_base64",
-    "delete_all_photos",
-    "insert_photo_record",
+    "delete_all_products",
+    "get_all_products",
+    "get_product_stats",
+    "insert_product_record",
     "upload_to_storage",
     "get_supabase_client",
     "lookup_product",

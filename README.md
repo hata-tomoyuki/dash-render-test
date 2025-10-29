@@ -24,12 +24,38 @@
 
 ---
 
-## クイックスタート (ハッカソン仕様)
+## クイックスタート
+
+### 🚀 自動セットアップ (推奨)
 
 ```bash
-python -m venv .venv
-. .venv/Scripts/activate   # PowerShell の場合
+# 仮想環境作成 & 依存関係インストール & .envファイル作成
+python setup.py
+
+# アプリ起動
+python app.py
+```
+
+### 📋 手動セットアップ
+
+```bash
+# 1. 仮想環境作成
+python -m venv venv
+
+# 2. 仮想環境有効化
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
+# 3. 依存関係インストール
 pip install -r requirements.txt
+
+# 4. 環境変数ファイル作成 (.env をコピーして設定)
+# setup.py を実行すると自動で作成されます
+
+# 5. アプリ起動
+python app.py
 ```
 
 バーコード検出には `zbar` ライブラリが必要です。
@@ -42,8 +68,132 @@ pip install -r requirements.txt
 
 1. [Supabase](https://app.supabase.com/) で無料プロジェクトを作成
 2. Storage に Public バケット `photos` を作成
-3. `photos` テーブルを作成 (必要なら `supabase/migrations` を参照)
+3. データベーステーブルを作成 (Supabase ダッシュボードの SQL Editor で実行)
 4. `.env` に以下を設定
+
+```sql
+-- 作品シリーズテーブル
+CREATE TABLE IF NOT EXISTS works_series (
+  works_series_id SERIAL PRIMARY KEY,
+  works_series_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 作品情報テーブル
+CREATE TABLE IF NOT EXISTS works_information (
+  works_id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  works_series_id INTEGER REFERENCES works_series(works_series_id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 版権元テーブル
+CREATE TABLE IF NOT EXISTS copyright_source (
+  copyright_company_id SERIAL PRIMARY KEY,
+  copyright_company_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 製品種別テーブル
+CREATE TABLE IF NOT EXISTS product_type (
+  product_group_id SERIAL PRIMARY KEY,
+  product_group_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 製品規格サイズテーブル
+CREATE TABLE IF NOT EXISTS product_regulations_size (
+  product_size_id SERIAL PRIMARY KEY,
+  product_group_id INTEGER REFERENCES product_type(product_group_id) ON DELETE SET NULL,
+  product_type TEXT NOT NULL,
+  product_size_horizontal INTEGER,
+  product_size_depth INTEGER,
+  product_size_vertical INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 収納場所テーブル
+CREATE TABLE IF NOT EXISTS receipt_location (
+  receipt_location_id SERIAL PRIMARY KEY,
+  receipt_location_name TEXT NOT NULL UNIQUE,
+  receipt_location_size_horizontal INTEGER,
+  receipt_location_size_depth INTEGER,
+  receipt_location_size_vertical INTEGER,
+  receipt_count_per_1 INTEGER DEFAULT 1,
+  receipt_size_horizontal_per_1 INTEGER,
+  receipt_size_depth_per_1 INTEGER,
+  receipt_size_vertical_per_1 INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 製品情報テーブル（拡張版）
+CREATE TABLE IF NOT EXISTS products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- 基本情報
+  barcode TEXT,
+  barcode_type TEXT DEFAULT 'unknown',
+  product_name TEXT,
+  description TEXT DEFAULT '',
+
+  -- 関連情報
+  works_id INTEGER REFERENCES works_information(works_id) ON DELETE SET NULL,
+  copyright_company_id INTEGER REFERENCES copyright_source(copyright_company_id) ON DELETE SET NULL,
+  product_group_id INTEGER REFERENCES product_type(product_group_id) ON DELETE SET NULL,
+  product_size_id INTEGER REFERENCES product_regulations_size(product_size_id) ON DELETE SET NULL,
+
+  -- 画像関連
+  image_url TEXT,
+  additional_images TEXT[], -- 追加画像URLの配列
+
+  -- タグ関連
+  tags TEXT[] DEFAULT '{}',
+  custom_tags TEXT[] DEFAULT '{}',
+
+  -- 収納関連
+  receipt_location_id INTEGER REFERENCES receipt_location(receipt_location_id) ON DELETE SET NULL,
+
+  -- 価格・数量情報
+  price INTEGER,
+  quantity INTEGER DEFAULT 1,
+  purchase_date DATE,
+
+  -- メモ・備考
+  notes TEXT,
+  memo TEXT,
+
+  -- タイムスタンプ
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Row Level Securityの設定とポリシー
+ALTER TABLE works_series ENABLE ROW LEVEL SECURITY;
+ALTER TABLE works_information ENABLE ROW LEVEL SECURITY;
+ALTER TABLE copyright_source ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_type ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_regulations_size ENABLE ROW LEVEL SECURITY;
+ALTER TABLE receipt_location ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+
+-- 全テーブルに共通のRLSポリシー適用
+CREATE POLICY "Anyone can view works_series" ON works_series FOR SELECT TO public USING (true);
+CREATE POLICY "Anyone can insert works_series" ON works_series FOR INSERT TO public WITH CHECK (true);
+CREATE POLICY "Anyone can update works_series" ON works_series FOR UPDATE TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Anyone can delete works_series" ON works_series FOR DELETE TO public USING (true);
+
+-- (同様に他のテーブルにもRLSポリシーを適用)
+
+-- インデックスの作成
+CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
+CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_products_tags ON products USING GIN(tags);
+```
 
 ```
 VITE_SUPABASE_URL=https://your-project.supabase.co

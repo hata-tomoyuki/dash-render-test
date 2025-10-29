@@ -86,8 +86,10 @@ from services.io_intelligence import describe_image
 from services.tag_extraction import extract_tags
 from services.barcode_service import decode_from_base64
 from services.photo_service import (
-    delete_all_photos,
-    insert_photo_record,
+    delete_all_products,
+    get_all_products,
+    get_product_stats,
+    insert_product_record,
     upload_to_storage,
 )
 from services.supabase_client import get_supabase_client
@@ -96,13 +98,15 @@ supabase = get_supabase_client()
 
 
 def _fetch_home_metrics() -> Dict[str, int]:
-    try:
+    if supabase is None:
         photos = _fetch_photos()
         total = len(photos)
         unique = len(
             set(photo.get("barcode") for photo in photos if photo.get("barcode"))
         )
         return {"total": total, "unique": unique}
+    try:
+        return get_product_stats(supabase)
     except Exception:
         return {"total": 0, "unique": 0}
 
@@ -111,19 +115,16 @@ def _fetch_photos() -> List[Dict[str, Any]]:
     if supabase is None:
         return PHOTOS_STORAGE.copy()  # Return in-memory storage for demo
     try:
-        response = (
-            supabase.table("photos")
-            .select("*")
-            .order("created_at", desc=True)
-            .execute()
-        )
-        return response.data or []
+        return get_all_products(supabase)
     except Exception:
         return PHOTOS_STORAGE.copy()  # Fallback to in-memory storage
 
 
 def _fetch_total_photos() -> int:
     return len(_fetch_photos())
+
+
+PLACEHOLDER_IMAGE_URL = "https://placehold.co/600x600?text=No+Photo"
 
 
 def _empty_registration_state() -> Dict[str, Any]:
@@ -384,8 +385,10 @@ app.layout = serve_layout
         Output("nav-register", "className"),
         Output("nav-gallery", "className"),
         Output("nav-settings", "className"),
+        Output("registration-store", "data", allow_duplicate=True),
     ],
     Input("url", "pathname"),
+    prevent_initial_call="initial_duplicate",
 )
 def display_page(pathname: str):
     classes = [
@@ -398,24 +401,30 @@ def display_page(pathname: str):
     if pathname == "/register":
         classes[1] = "nav-link active text-white"
         page = render_barcode_page()
+        store_data = _serialise_state(_empty_registration_state())
     elif pathname == "/register/photo":
         classes[1] = "nav-link active text-white"
         page = render_photo_page()
+        store_data = no_update
     elif pathname == "/register/review":
         classes[1] = "nav-link active text-white"
         page = render_review_page()
+        store_data = no_update
     elif pathname == "/gallery":
         classes[2] = "nav-link active text-white"
         page = render_gallery(_fetch_photos())
+        store_data = no_update
     elif pathname == "/settings":
         classes[3] = "nav-link active text-white"
         page = render_settings(_fetch_total_photos(), CURRENT_THEME)
+        store_data = no_update
     else:
         classes[0] = "nav-link active text-white"
         metrics = _fetch_home_metrics()
         page = render_home(metrics["total"], metrics["unique"])
+        store_data = no_update
 
-    return [page, *classes]
+    return [page, *classes, store_data]
 
 
 @app.callback(
@@ -466,7 +475,7 @@ def handle_barcode_actions(
         info_card = html.Div(
             [
                 html.Div(
-                    "✅ バーコードを取得しました。",
+                    "バーコードを取得しました。",
                     className="card-custom",
                     style={
                         "marginBottom": "10px",
@@ -722,7 +731,7 @@ def handle_front_photo(
         preview_card = html.Div(
             [
                 html.Div(
-                    "✅ 正面写真を取得しました。",
+                    "正面写真を取得しました。",
                     style={
                         "color": "#4caf50",
                         "fontWeight": "600",
@@ -794,7 +803,11 @@ def toggle_save_button(data):
     barcode_ready = state["barcode"]["status"] in {"captured", "manual", "skipped"}
     photo_ready = state["front_photo"]["status"] in {"captured", "skipped"}
     tags_ready = state["tags"]["status"] != "idle"
-    return not (barcode_ready and photo_ready and tags_ready)
+    disabled = not (barcode_ready and photo_ready and tags_ready)
+    print(
+        f"DEBUG toggle_save_button: barcode_ready={barcode_ready}, photo_ready={photo_ready}, tags_ready={tags_ready}, disabled={disabled}"
+    )
+    return disabled
 
 
 @app.callback(
@@ -916,7 +929,6 @@ def render_review_summary(selected_tags, note_text, store_data):
 @app.callback(
     [
         Output("register-alert", "children"),
-        Output("registration-store", "data", allow_duplicate=True),
         Output("url", "pathname", allow_duplicate=True),
     ],
     Input("save-button", "n_clicks"),
@@ -924,15 +936,18 @@ def render_review_summary(selected_tags, note_text, store_data):
     State("front-photo-note", "value"),
     State("tag-checklist", "value"),
     State("note-editor", "value"),
-    prevent_initial_call="initial_duplicate",
+    prevent_initial_call=True,
 )
 def save_registration(n_clicks, store_data, note, selected_tags, final_note):
     if not n_clicks:
         raise PreventUpdate
 
+    print(f"DEBUG: save_registration called with n_clicks={n_clicks}")
     state = _ensure_state(store_data)
     barcode_status = state["barcode"]["status"]
     front_status = state["front_photo"]["status"]
+    print(f"DEBUG: barcode_status={barcode_status}, front_status={front_status}")
+    print(f"DEBUG: state keys: {list(state.keys())}")
 
     if barcode_status not in {"captured", "manual", "skipped"}:
         return (
@@ -940,7 +955,6 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
                 "バーコード情報を取得するか、スキップを選択してください。",
                 className="alert alert-warning",
             ),
-            _serialise_state(state),
             no_update,
         )
 
@@ -950,7 +964,6 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
                 "正面写真を撮影するか、スキップを選択してください。",
                 className="alert alert-warning",
             ),
-            _serialise_state(state),
             no_update,
         )
 
@@ -971,6 +984,9 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
             else:
                 # For demo, store data URI
                 image_url = state["front_photo"]["content"]
+        elif supabase is not None:
+            # Use placeholder image when photo is skipped
+            image_url = PLACEHOLDER_IMAGE_URL
 
         description_text = final_note
         if selected_tags:
@@ -982,13 +998,30 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
             )
 
         if supabase is not None:
-            insert_photo_record(
-                supabase,
-                state["barcode"].get("value") or "",
-                state["barcode"].get("type") or "UNKNOWN",
-                image_url or "",
-                description_text,
+            # Extract product name from lookup data if available
+            product_name = ""
+            lookup_items = state["lookup"].get("items", [])
+            if lookup_items:
+                product_name = lookup_items[0].get("name", "")
+            print(
+                f"DEBUG: Inserting to Supabase - barcode: {state['barcode'].get('value')}, product_name: {product_name}, image_url: {image_url}"
             )
+
+            try:
+                insert_product_record(
+                    supabase,
+                    state["barcode"].get("value") or "",
+                    state["barcode"].get("type") or "UNKNOWN",
+                    product_name,
+                    image_url or "",
+                    description_text,
+                    tags=selected_tags,
+                    notes=final_note,
+                )
+                print("DEBUG: Successfully inserted to Supabase")
+            except Exception as insert_exc:
+                print(f"DEBUG: Failed to insert to Supabase: {insert_exc}")
+                raise
         else:
             # For demo, save to in-memory storage
             import time
@@ -1006,24 +1039,23 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
             html.Div(
                 [
                     html.Div(
-                        "❌ 保存中にエラーが発生しました",
+                        "保存中にエラーが発生しました",
                         className="alert-heading",
                     ),
                     html.P(str(exc)),
                 ],
                 className="alert alert-danger",
             ),
-            _serialise_state(state),
             no_update,
         )
 
     print(
-        f"✅ 保存成功: barcode={state['barcode'].get('value')}, tags={selected_tags}"
+        f"保存成功: barcode={state['barcode'].get('value')}, tags={selected_tags}"
     )  # Debug log
     success_message = html.Div(
         [
             html.Div(
-                "✅ 登録が完了しました！",
+                "登録が完了しました！",
                 className="alert-heading",
             ),
             html.P(
@@ -1040,7 +1072,7 @@ def save_registration(n_clicks, store_data, note, selected_tags, final_note):
         className="alert alert-success",
     )
 
-    return success_message, _serialise_state(_empty_registration_state()), "/register"
+    return success_message, "/register"
 
 
 @app.callback(
@@ -1064,15 +1096,13 @@ def save_theme(n_clicks, selected_theme):
         new_css_url = get_bootswatch_css(selected_theme)
         print(f"Theme changed to: {selected_theme}, new CSS: {new_css_url}")
         message = html.Div(
-            f"✅ テーマを '{selected_theme.title()}' に変更しました。",
+            f"テーマを '{selected_theme.title()}' に変更しました。",
             className="alert alert-success",
         )
         return message, new_css_url, selected_theme
     else:
         return (
-            html.Div(
-                "❌ 無効なテーマが選択されました。", className="alert alert-danger"
-            ),
+            html.Div("無効なテーマが選択されました。", className="alert alert-danger"),
             no_update,
             no_update,
         )
@@ -1087,7 +1117,7 @@ def handle_delete(n_clicks):
 
     if supabase is None:
         return html.Div(
-            "❌ データベース接続エラー",
+            "データベース接続エラー",
             style={
                 "color": "#ff6b6b",
                 "fontWeight": "600",
@@ -1097,10 +1127,10 @@ def handle_delete(n_clicks):
         )
 
     try:
-        delete_all_photos(supabase)
+        delete_all_products(supabase)
     except Exception as exc:  # pragma: no cover - Supabase例外ハンドリング
         return html.Div(
-            f"❌ エラー: {exc}",
+            f"エラー: {exc}",
             style={
                 "color": "#ff6b6b",
                 "fontWeight": "600",
@@ -1110,7 +1140,7 @@ def handle_delete(n_clicks):
         )
 
         return html.Div(
-            "✅ 全てのデータを削除しました",
+            "全てのデータを削除しました",
             style={
                 "color": "#4caf50",
                 "fontWeight": "600",
@@ -1123,17 +1153,17 @@ def handle_delete(n_clicks):
 if __name__ == "__main__":
     print("")
     print("=" * 60)
-    print("📷 写真管理アプリを起動しています...")
+    print("写真管理アプリを起動しています...")
     print("=" * 60)
     print("")
     if supabase is None:
-        print("⚠️  警告: Supabaseに接続されていません")
+        print("警告: Supabaseに接続されていません")
         print("    データベース機能を使用するには、.envファイルを設定してください")
         print("")
-    print("🌐 ブラウザで以下のURLにアクセスしてください:")
+    print("ブラウザで以下のURLにアクセスしてください:")
     print("   http://localhost:8050")
     print("")
-    print("📱 スマホからアクセスする場合:")
+    print("スマホからアクセスする場合:")
     print("   http://[あなたのPCのIPアドレス]:8050")
     print("")
     print("=" * 60)

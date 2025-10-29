@@ -11,8 +11,8 @@ IO_API_URL = os.getenv(
     "IO_INTELLIGENCE_API_URL",
     "https://api.intelligence.io.solutions/api/v1/chat/completions",
 )
-IO_API_KEY = os.getenv("IOINTELLIGENCE_API_KEY")
-IO_MODEL = os.getenv("IO_INTELLIGENCE_MODEL", "openai/gpt-oss-120b")
+IO_API_KEY = os.getenv("IO_INTELLIGENCE_API_KEY")
+IO_MODEL = os.getenv("IO_INTELLIGENCE_MODEL", "meta-llama/Llama-3.2-90B-Vision-Instruct")
 IO_TIMEOUT = int(os.getenv("IO_INTELLIGENCE_TIMEOUT", "10"))
 
 
