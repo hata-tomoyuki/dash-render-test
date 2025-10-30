@@ -4,7 +4,7 @@ from dash import dcc, html
 NAV_ITEMS = [
     {"href": "/", "label": "ホーム", "icon": "bi-house", "id": "nav-home"},
     {"href": "/register", "label": "写真を登録", "icon": "bi-camera", "id": "nav-register"},
-    {"href": "/gallery", "label": "写真一覧", "icon": "bi-images", "id": "nav-gallery"},
+    {"href": "/gallery", "label": "ダッシュボード", "icon": "bi-speedometer2", "id": "nav-gallery"},
     {"href": "/settings", "label": "設定", "icon": "bi-gear", "id": "nav-settings"},
 ]
 
