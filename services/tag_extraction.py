@@ -74,7 +74,10 @@ def extract_tags(
 ) -> Dict[str, Any]:
     """Generate tags using product search results and description text."""
 
+    print(f"DEBUG: extract_tags called with candidates: {len(product_candidates) if product_candidates else 0}, description: {bool(description)}")
+
     if not IO_API_KEY:
+        print("DEBUG: IO_API_KEY is not set")
         return {
             "status": "missing_credentials",
             "tags": [],
@@ -82,6 +85,7 @@ def extract_tags(
         }
 
     if not product_candidates and not description:
+        print("DEBUG: No candidates and no description")
         return {
             "status": "not_ready",
             "tags": [],
@@ -91,23 +95,78 @@ def extract_tags(
     formatted_candidates = _format_product_candidates(product_candidates)
     description_text = description or ""
 
-    instructions = (
-        "以下の製品候補情報と画像説明をもとに、推し活グッズ管理に役立つ日本語タグを生成してください。"
-        "タグは製品カテゴリ、キャラクター名、作品名、素材、色、イベント名など利用者が絞り込みに使える語を中心にしてください。"
-        f"タグは最大{DEFAULT_TAG_COUNT}個、重複しないように。"
-        '返答は JSON 配列 (例: ["タグ1", "タグ2"]) のみで行ってください。'
-    )
+    print(f"DEBUG: formatted_candidates: {bool(formatted_candidates)}, description_text: {bool(description_text)}")
 
-    candidates_block = formatted_candidates or "(商品候補情報なし)"
-    description_block = description_text or "(画像説明なし)"
+    # 楽天APIテキストと画像説明から別々にタグを生成
+    all_tags = []
 
-    prompt = (
-        f"# 商品候補\n{candidates_block}\n\n"
-        f"# 画像説明\n{description_block}\n\n"
-        f"# 指示\n{instructions}"
-    )
+    # 楽天APIの結果がある場合、最大5個のタグを生成
+    if product_candidates:
+        print("DEBUG: Extracting tags from Rakuten API data")
+        rakuten_tags = _extract_tags_from_text(formatted_candidates, "product_info", 5)
+        if rakuten_tags:
+            all_tags.extend(rakuten_tags)
+            print(f"Generated {len(rakuten_tags)} tags from Rakuten API data: {rakuten_tags}")
+
+    # 画像説明がある場合、最大5個のタグを生成
+    if description_text:
+        print(f"DEBUG: Extracting tags from image description: {description_text[:100]}...")
+        image_tags = _extract_tags_from_text(description_text, "image_description", 5)
+        if image_tags:
+            all_tags.extend(image_tags)
+            print(f"Generated {len(image_tags)} tags from image description: {image_tags}")
+
+    print(f"DEBUG: Total tags before deduplication: {len(all_tags)}")
+
+    # 重複を除去し、最大10個に制限
+    unique_tags = []
+    seen = set()
+    for tag in all_tags:
+        tag_lower = tag.lower()
+        if tag_lower not in seen:
+            seen.add(tag_lower)
+            unique_tags.append(tag)
+
+    final_tags = unique_tags[:10]
+
+    if not final_tags:
+        return {
+            "status": "error",
+            "tags": [],
+            "message": "タグを生成できませんでした。",
+        }
+
+    return {
+        "status": "success",
+        "tags": final_tags,
+        "message": f"{len(final_tags)}個のタグ候補を生成しました。",
+    }
+
+
+def _extract_tags_from_text(text: str, source_type: str, max_tags: int) -> List[str]:
+    """指定されたテキストからタグを抽出"""
+    if not text or not text.strip():
+        return []
+
+    if source_type == "product_info":
+        instructions = (
+            "以下の商品情報をもとに、推し活グッズ管理に役立つ日本語タグを生成してください。"
+            "タグは製品カテゴリ、キャラクター名、作品名、素材、色、イベント名など利用者が絞り込みに使える語を中心にしてください。"
+            f"タグは最大{max_tags}個、重複しないように。"
+            '返答は JSON 配列 (例: ["タグ1", "タグ2"]) のみで行ってください。'
+        )
+        prompt = f"# 商品情報\n{text}\n\n# 指示\n{instructions}"
+    else:  # image_description
+        instructions = (
+            "以下の画像説明をもとに、推し活グッズ管理に役立つ日本語タグを生成してください。"
+            "タグは製品カテゴリ、キャラクター名、作品名、素材、色、イベント名など利用者が絞り込みに使える語を中心にしてください。"
+            f"タグは最大{max_tags}個、重複しないように。"
+            '返答は JSON 配列 (例: ["タグ1", "タグ2"]) のみで行ってください。'
+        )
+        prompt = f"# 画像説明\n{text}\n\n# 指示\n{instructions}"
+
     prompt_length = len(prompt)
-    print(f"IO API extract_tags: prompt length = {prompt_length} characters")
+    print(f"IO API _extract_tags_from_text ({source_type}): prompt length = {prompt_length} characters")
 
     payload = {
         "model": IO_MODEL,
@@ -132,43 +191,33 @@ def extract_tags(
         retry_on_exception=lambda exc: isinstance(exc, requests.RequestException),
     )
     def _call_api():
-        print(f"IO API extract_tags: sending request with timeout={IO_TIMEOUT}s")
+        print(f"IO API _extract_tags_from_text ({source_type}): sending request with timeout={IO_TIMEOUT}s")
         start_time = time.time()
         response = requests.post(
             IO_API_URL, headers=headers, json=payload, timeout=IO_TIMEOUT
         )
         response.raise_for_status()
         elapsed = time.time() - start_time
-        print(f"IO API extract_tags: response received in {elapsed:.2f}s")
+        print(f"IO API _extract_tags_from_text ({source_type}): response received in {elapsed:.2f}s")
         return response
 
     try:
         response = _call_api()
     except requests.RequestException as exc:  # pragma: no cover - ネットワーク依存
-        return {
-            "status": "error",
-            "tags": [],
-            "message": f"タグ抽出API通信エラー: {exc}",
-        }
+        print(f"IO API _extract_tags_from_text ({source_type}): API call failed: {exc}")
+        return []
 
     try:
         payload = response.json()
     except ValueError as exc:  # pragma: no cover - JSON解析エラー
-        return {
-            "status": "error",
-            "tags": [],
-            "message": f"タグ抽出APIレスポンスの解析に失敗しました: {exc}",
-        }
+        print(f"IO API _extract_tags_from_text ({source_type}): JSON parse failed: {exc}")
+        return []
 
     try:
         content = payload["choices"][0]["message"]["content"]
     except (KeyError, IndexError):
-        return {
-            "status": "error",
-            "tags": [],
-            "message": "タグ抽出APIのレスポンスからテキストを取得できませんでした。",
-            "raw": payload,
-        }
+        print(f"IO API _extract_tags_from_text ({source_type}): No content in response")
+        return []
 
     if isinstance(content, list):
         text_parts: List[str] = []
@@ -180,17 +229,4 @@ def extract_tags(
         raw_text = str(content).strip()
 
     tags = _parse_tags(raw_text)
-    if not tags:
-        return {
-            "status": "error",
-            "tags": [],
-            "message": "タグ抽出結果が空でした。",
-            "raw": raw_text,
-        }
-
-    return {
-        "status": "success",
-        "tags": tags,
-        "message": "タグ候補を生成しました。",
-        "raw": raw_text,
-    }
+    return tags[:max_tags] if tags else []

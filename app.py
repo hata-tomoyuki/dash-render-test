@@ -334,7 +334,15 @@ def _update_tags(state: Dict[str, Any]) -> Dict[str, Any]:
     items = state["lookup"].get("items") or []
     description = state["front_photo"].get("description")
 
-    if not items and not description:
+    print(f"DEBUG: _update_tags called - items: {len(items)}, description: {bool(description)}")
+
+    # 4つのパターンを適切に処理
+    has_rakuten_data = bool(items)
+    has_image_description = bool(description)
+
+    print(f"DEBUG: has_rakuten_data: {has_rakuten_data}, has_image_description: {has_image_description}")
+
+    if not has_rakuten_data and not has_image_description:
         state["tags"] = {
             "status": "not_ready",
             "tags": [],
@@ -342,7 +350,20 @@ def _update_tags(state: Dict[str, Any]) -> Dict[str, Any]:
         }
         return state["tags"]
 
+    # IO Intelligence APIでタグを生成
+    print("DEBUG: Calling extract_tags...")
     tag_result = extract_tags(items, description)
+    print(f"DEBUG: extract_tags result: {tag_result}")
+
+    # タグ生成結果に応じてメッセージを調整
+    if tag_result["status"] == "success":
+        if has_rakuten_data and has_image_description:
+            tag_result["message"] = f"楽天API情報と画像説明から{len(tag_result['tags'])}個のタグを生成しました。"
+        elif has_rakuten_data:
+            tag_result["message"] = f"楽天API情報から{len(tag_result['tags'])}個のタグを生成しました。"
+        elif has_image_description:
+            tag_result["message"] = f"画像説明から{len(tag_result['tags'])}個のタグを生成しました。"
+
     state["tags"] = tag_result
     return tag_result
 
@@ -643,10 +664,16 @@ def handle_barcode_actions(
     prevent_initial_call="initial_duplicate",
 )
 def process_tags(store_data):
+    print("DEBUG: process_tags called")
     state = _ensure_state(store_data)
+    print(f"DEBUG: tags status: {state['tags'].get('status')}")
     if state["tags"]["status"] == "loading":
+        print("DEBUG: Calling _update_tags...")
         _update_tags(state)
-        return _serialise_state(state)
+        result = _serialise_state(state)
+        print(f"DEBUG: process_tags returning updated state")
+        return result
+    print("DEBUG: process_tags raising PreventUpdate")
     raise PreventUpdate
 
 
@@ -734,15 +761,17 @@ def handle_front_photo(
             description_result = describe_image(contents)
             if description_result["status"] == "success":
                 state["front_photo"]["description"] = description_result["text"]
-
-                # タグ生成プロセスを開始
-                if state["lookup"].get("items") or state["front_photo"]["description"]:
-                    state["tags"]["status"] = "loading"
-
+                print(f"DEBUG: Image description generated: {description_result['text'][:100]}...")
             else:
                 state["front_photo"]["description"] = None
+                print("DEBUG: Image description generation failed")
         except Exception as io_error:
             state["front_photo"]["description"] = None
+            print(f"DEBUG: Image description generation error: {io_error}")
+
+        # 画像がアップロードされた時点でタグ生成プロセスを開始（バーコード情報がなくても画像説明があれば生成）
+        print(f"DEBUG: Starting tag generation process - lookup items: {len(state['lookup'].get('items', []))}, description: {bool(state['front_photo']['description'])}")
+        state["tags"]["status"] = "loading"
 
         preview_card = html.Div(
             [
@@ -999,12 +1028,56 @@ def update_photo_thumbnail(store_data):
         # Base64エンコードされた画像データを直接使用
         content = front_photo["content"]
         print(f"DEBUG: Photo content found, length: {len(content)}")
-        if content.startswith("data:image"):
-            print("DEBUG: Content is data URL format")
-        else:
-            print("DEBUG: Content is NOT data URL format")
-        print(f"DEBUG: Content preview: {content[:50]}...")
-        return content
+
+        try:
+            # Base64データをデコードして画像を処理
+            import base64
+            from PIL import Image
+            import io
+
+            # data:image/jpeg;base64, の部分を除去
+            if content.startswith("data:image"):
+                header, base64_data = content.split(",", 1)
+                image_data = base64.b64decode(base64_data)
+            else:
+                image_data = base64.b64decode(content)
+
+            # PILで画像を開く
+            image = Image.open(io.BytesIO(image_data))
+            print(f"DEBUG: Original image size: {image.size}, mode: {image.mode}")
+
+            # サムネール用にリサイズ（最大200x200に収まるように）
+            max_size = (200, 200)
+            image.thumbnail(max_size, Image.LANCZOS)
+            print(f"DEBUG: Resized image size: {image.size}")
+
+            # RGBモードに変換（JPEG保存のため）
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+
+            # リサイズした画像をBase64にエンコード
+            output_buffer = io.BytesIO()
+            image.save(output_buffer, format='JPEG', quality=85)
+            resized_base64 = base64.b64encode(output_buffer.getvalue()).decode('utf-8')
+            resized_content = f"data:image/jpeg;base64,{resized_base64}"
+
+            print(f"DEBUG: Resized data URL length: {len(resized_content)}")
+
+            # 最終チェック：500KB以内に収まるか
+            if len(resized_content) > 512 * 1024:  # 512KB
+                print(f"DEBUG: Resized image still too large ({len(resized_content)} bytes), skipping display")
+                return ""
+
+            return resized_content
+
+        except Exception as e:
+            print(f"DEBUG: Image processing error: {e}")
+            # エラーが発生した場合は元のコンテンツを返す（フォールバック）
+            # ただしサイズチェックは行う
+            if len(content) > 512 * 1024:  # 512KB
+                print(f"DEBUG: Original image too large ({len(content)} bytes), skipping display")
+                return ""
+            return content
     else:
         print("DEBUG: No photo content")
         return ""
@@ -1215,8 +1288,30 @@ def display_api_results(store_data):
 
     # IO Intelligenceタグの表示
     tags_data = state.get("tags", {})
-    tags_display = html.Div("画像分析情報がありません", className="alert alert-info")
-    if tags_data.get("tags"):
+    print(f"DEBUG: tags_data status: {tags_data.get('status')}, tags: {tags_data.get('tags', [])}")
+
+    # デフォルトメッセージを変更
+    tags_display = html.Div(
+        "バーコード照合または画像説明の結果が揃うとタグを生成します。",
+        className="alert alert-info"
+    )
+
+    if not tags_data or tags_data.get("status") == "not_ready":
+        tags_display = html.Div(
+            "バーコード照合または画像説明の結果が揃うとタグを生成します。",
+            className="alert alert-info"
+        )
+    elif tags_data.get("status") == "missing_credentials":
+        tags_display = html.Div(
+            "IO Intelligence APIキーが設定されていません。",
+            className="alert alert-warning"
+        )
+    elif tags_data.get("status") == "error":
+        tags_display = html.Div(
+            f"タグ生成エラー: {tags_data.get('message', '不明なエラー')}",
+            className="alert alert-danger"
+        )
+    elif tags_data.get("status") == "success" and tags_data.get("tags"):
         try:
             tags_list = tags_data["tags"]
             if isinstance(tags_list, list) and tags_list:
@@ -1228,6 +1323,10 @@ def display_api_results(store_data):
                                 html.Span(tag, className="badge bg-secondary me-1 mb-1")
                                 for tag in tags_list[:20]  # 最大20個表示
                             ]
+                        ),
+                        html.Div(
+                            tags_data.get("message", ""),
+                            className="text-muted small mt-2"
                         ),
                     ]
                 )
