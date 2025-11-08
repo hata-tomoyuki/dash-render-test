@@ -23,6 +23,7 @@ DEFAULT_REGISTRATION_STATE = {
         "content_type": None,
         "status": "idle",
         "description": None,
+        "original_tmp_path": None,
     },
     "lookup": {
         "status": "idle",

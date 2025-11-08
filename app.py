@@ -1,6 +1,8 @@
 import base64
 import datetime
+import os
 import re
+import tempfile
 from typing import Any, Dict, List, Optional
 
 import dash
@@ -151,6 +153,7 @@ def _empty_registration_state() -> Dict[str, Any]:
             "vision_source": None,
             "vision_raw": None,
             "structured_data": None,
+            "original_tmp_path": None,
         },
         "lookup": {
             "status": "idle",
@@ -198,6 +201,7 @@ def _ensure_state(data: Dict[str, Any]) -> Dict[str, Any]:
             "vision_source": front.get("vision_source"),
             "vision_raw": front.get("vision_raw"),
             "structured_data": front.get("structured_data"),
+            "original_tmp_path": front.get("original_tmp_path"),
         }
     )
 
@@ -346,9 +350,7 @@ def _render_tags_card(tag_result: Dict[str, Any]) -> html.Div:
             html.Div("タグ候補が見つかりませんでした。", className="lookup-message")
         )
     elif status == "loading":
-        children.append(
-            html.Div("タグを生成中です...", className="lookup-message")
-        )
+        children.append(html.Div("タグを生成中です...", className="lookup-message"))
 
     if not children:
         children.append(
@@ -766,7 +768,20 @@ def handle_front_photo(
     state = _ensure_state(store_data)
     message = no_update
 
+    def _cleanup_temp_file() -> None:
+        tmp_path = state.get("front_photo", {}).get("original_tmp_path")
+        if tmp_path and isinstance(tmp_path, str):
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception as cleanup_error:
+                print(
+                    f"DEBUG: Failed to remove temp file '{tmp_path}': {cleanup_error}"
+                )
+        state["front_photo"]["original_tmp_path"] = None
+
     if trigger_id == "front-skip-button":
+        _cleanup_temp_file()
         state["front_photo"].update(
             {
                 "content": None,
@@ -779,6 +794,7 @@ def handle_front_photo(
                 "vision_source": None,
                 "vision_raw": None,
                 "structured_data": None,
+                "original_tmp_path": None,
             }
         )
         message = html.Div(
@@ -797,11 +813,12 @@ def handle_front_photo(
         if not contents:
             raise PreventUpdate
 
+        _cleanup_temp_file()
+
         header = contents.split(",", 1)[0]
         content_type = header.replace("data:", "").split(";")[0]
         state["front_photo"].update(
             {
-                "content": contents,
                 "filename": filename or "front_photo.jpg",
                 "content_type": content_type or "image/jpeg",
                 "status": "captured",
@@ -817,6 +834,7 @@ def handle_front_photo(
         api_contents = contents
         vision_raw = None
         public_url = None
+        display_data_url = contents
 
         if contents:
             try:
@@ -829,6 +847,35 @@ def handle_front_photo(
                     original_bytes = base64.b64decode(base64_data)
                 else:
                     original_bytes = base64.b64decode(contents)
+
+                preview_data_url = contents
+                try:
+                    preview_image = Image.open(io.BytesIO(original_bytes))
+                    preview_image.thumbnail((1024, 1024), Image.LANCZOS)
+                    preview_buffer = io.BytesIO()
+                    preview_image.save(preview_buffer, format="JPEG", quality=85)
+                    preview_b64 = base64.b64encode(preview_buffer.getvalue()).decode(
+                        "utf-8"
+                    )
+                    preview_data_url = f"data:image/jpeg;base64,{preview_b64}"
+                    preview_image.close()
+                except Exception as preview_error:
+                    print(f"DEBUG: Failed to generate preview image: {preview_error}")
+
+                display_data_url = preview_data_url
+
+                temp_file_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, prefix="front_photo_", suffix=".jpg"
+                    ) as tmp_file:
+                        tmp_file.write(original_bytes)
+                        temp_file_path = tmp_file.name
+                except Exception as tmp_error:
+                    print(
+                        f"DEBUG: Failed to persist original photo to temp file: {tmp_error}"
+                    )
+                state["front_photo"]["original_tmp_path"] = temp_file_path
 
                 if len(original_bytes) > 100000:  # 100KB以上ならリサイズ
                     print(
@@ -846,7 +893,9 @@ def handle_front_photo(
                     file_bytes_for_upload = output_buffer.getvalue()
                     vision_raw = base64.b64encode(file_bytes_for_upload).decode("utf-8")
                     api_contents = f"data:image/jpeg;base64,{vision_raw}"
-                    print(f"DEBUG: Resized image for vision payload: {len(api_contents)} bytes")
+                    print(
+                        f"DEBUG: Resized image for vision payload: {len(api_contents)} bytes"
+                    )
 
                     try:
                         public_url = upload_to_storage(
@@ -896,7 +945,7 @@ def handle_front_photo(
                     },
                 ),
                 html.Img(
-                    src=contents,
+                    src=display_data_url,
                     style={
                         "width": "100%",
                         "maxHeight": "300px",
@@ -911,6 +960,7 @@ def handle_front_photo(
         # IOインテリジェンスの処理をバックグラウンドで開始
         # ここでは状態のみ更新し、実際の処理は後で行う
         state["description"] = {"status": "processing"}
+        state["front_photo"]["content"] = display_data_url
 
         cards = [preview_card]
         message = html.Div(cards)
@@ -1242,7 +1292,9 @@ def process_tags(store_data):
                 f"DEBUG: describe_image result status: {description_result.get('status')}"
             )
         except Exception as io_error:
-            print(f"DEBUG: describe_image raised exception inside process_tags: {io_error}")
+            print(
+                f"DEBUG: describe_image raised exception inside process_tags: {io_error}"
+            )
             import traceback
 
             print(f"DEBUG: Full traceback: {traceback.format_exc()}")
@@ -1254,7 +1306,9 @@ def process_tags(store_data):
             status = description_result.get("status")
             if status == "success":
                 generated_text = (description_result.get("text") or "").strip()
-                state["front_photo"]["model_used"] = description_result.get("model_used")
+                state["front_photo"]["model_used"] = description_result.get(
+                    "model_used"
+                )
                 state["front_photo"]["structured_data"] = description_result.get(
                     "structured_data"
                 )
@@ -1312,7 +1366,9 @@ def process_tags(store_data):
 
     elif photo_status == "captured" and description_status == "processing":
         # 別の呼び出しで処理中の場合は完了を待つ
-        print("DEBUG: process_tags found description still processing, skipping this round")
+        print(
+            "DEBUG: process_tags found description still processing, skipping this round"
+        )
         raise PreventUpdate
 
     # 2. タグ生成を試みる
@@ -1701,12 +1757,25 @@ store_data keys: {list(store_data.keys()) if store_data else "None"}
 
         # 写真データの保存（写真なしでもOK）
         photo_id = None
-        if state.get("front_photo", {}).get("content"):
+        front_photo_state = state.get("front_photo", {})
+        original_tmp_path = front_photo_state.get("original_tmp_path")
+        display_content = front_photo_state.get("content")
+
+        if original_tmp_path or display_content:
             print("Starting photo processing...")
             try:
                 # Supabase Storageを使用
-                content_string = state["front_photo"]["content"].split(",", 1)[1]
-                file_bytes = base64.b64decode(content_string)
+                if original_tmp_path and os.path.exists(original_tmp_path):
+                    with open(original_tmp_path, "rb") as original_file:
+                        file_bytes = original_file.read()
+                else:
+                    if display_content and "," in display_content:
+                        content_string = display_content.split(",", 1)[1]
+                        file_bytes = base64.b64decode(content_string)
+                    else:
+                        raise ValueError(
+                            "Preview photo data is not available for upload."
+                        )
 
                 # photoレコードを作成
                 print("Inserting photo record...")
@@ -1740,6 +1809,15 @@ store_data keys: {list(store_data.keys()) if store_data else "None"}
             except Exception as photo_error:
                 print(f"Photo processing failed: {photo_error}")
                 # 写真保存失敗でも製品登録は続行（photo_id = None）
+            finally:
+                if original_tmp_path and os.path.exists(original_tmp_path):
+                    try:
+                        os.remove(original_tmp_path)
+                        state["front_photo"]["original_tmp_path"] = None
+                    except Exception as cleanup_error:
+                        print(
+                            f"DEBUG: Failed to remove temp photo file after upload: {cleanup_error}"
+                        )
         else:
             print("No photo content found, skipping photo processing")
 
