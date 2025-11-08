@@ -1,5 +1,6 @@
 import base64
 import datetime
+import gc
 import os
 import re
 import tempfile
@@ -779,6 +780,7 @@ def handle_front_photo(
                     f"DEBUG: Failed to remove temp file '{tmp_path}': {cleanup_error}"
                 )
         state["front_photo"]["original_tmp_path"] = None
+        gc.collect()
 
     if trigger_id == "front-skip-button":
         _cleanup_temp_file()
@@ -848,19 +850,43 @@ def handle_front_photo(
                 else:
                     original_bytes = base64.b64decode(contents)
 
-                display_data_url = contents
+                preview_bytes = None
                 try:
                     preview_image = Image.open(io.BytesIO(original_bytes))
-                    preview_image.thumbnail((512, 512), Image.LANCZOS)
+                    preview_image.thumbnail((256, 256), Image.LANCZOS)
                     preview_buffer = io.BytesIO()
-                    preview_image.save(preview_buffer, format="JPEG", quality=80)
-                    preview_b64 = base64.b64encode(preview_buffer.getvalue()).decode(
-                        "utf-8"
-                    )
+                    preview_image.save(preview_buffer, format="JPEG", quality=70)
+                    preview_bytes = preview_buffer.getvalue()
+                    preview_b64 = base64.b64encode(preview_bytes).decode("utf-8")
                     display_data_url = f"data:image/jpeg;base64,{preview_b64}"
                     preview_image.close()
                 except Exception as preview_error:
+                    preview_bytes = None
+                    display_data_url = contents
                     print(f"DEBUG: Failed to generate preview image: {preview_error}")
+                finally:
+                    if preview_bytes is not None:
+                        del preview_bytes
+                    if "preview_buffer" in locals():
+                        del preview_buffer
+                    gc.collect()
+
+                reduced_bytes_for_vision = original_bytes
+                try:
+                    vision_image = Image.open(io.BytesIO(original_bytes))
+                    vision_image.thumbnail((256, 256), Image.LANCZOS)
+                    vision_buffer = io.BytesIO()
+                    vision_image.save(vision_buffer, format="JPEG", quality=70)
+                    reduced_bytes_for_vision = vision_buffer.getvalue()
+                    vision_image.close()
+                except Exception as reduce_error:
+                    print(
+                        f"DEBUG: Failed to reduce image for vision payload: {reduce_error}"
+                    )
+                finally:
+                    if "vision_buffer" in locals():
+                        del vision_buffer
+                    gc.collect()
 
                 temp_file_path = None
                 try:
@@ -875,47 +901,36 @@ def handle_front_photo(
                     )
                 state["front_photo"]["original_tmp_path"] = temp_file_path
 
-                if len(original_bytes) > 100000:  # 100KB以上ならリサイズ
-                    print(
-                        f"DEBUG: Image is large ({len(original_bytes)} bytes), resizing for vision call..."
+                vision_raw = base64.b64encode(reduced_bytes_for_vision).decode("utf-8")
+                api_contents = f"data:image/jpeg;base64,{vision_raw}"
+                print(
+                    f"DEBUG: Vision payload prepared (len={len(api_contents)} bytes, reduced resolution)"
+                )
+
+                try:
+                    public_url = upload_to_storage(
+                        supabase,
+                        reduced_bytes_for_vision,
+                        filename or "vision_tmp.jpg",
+                        "image/jpeg",
                     )
-                    image = Image.open(io.BytesIO(original_bytes))
-                    max_size = (512, 512)
-                    image.thumbnail(max_size, Image.LANCZOS)
-
-                    if image.mode != "RGB":
-                        image = image.convert("RGB")
-
-                    output_buffer = io.BytesIO()
-                    image.save(output_buffer, format="JPEG", quality=90)
-                    file_bytes_for_upload = output_buffer.getvalue()
-                    vision_raw = base64.b64encode(file_bytes_for_upload).decode("utf-8")
-                    api_contents = f"data:image/jpeg;base64,{vision_raw}"
+                    if public_url:
+                        api_contents = public_url
+                        print(f"DEBUG: Using public URL for vision: {public_url}")
+                except Exception as vision_upload_error:
                     print(
-                        f"DEBUG: Resized image for vision payload: {len(api_contents)} bytes"
+                        f"DEBUG: Vision temp upload failed, fallback to data URI: {vision_upload_error}"
                     )
-
-                    try:
-                        public_url = upload_to_storage(
-                            supabase,
-                            file_bytes_for_upload,
-                            filename or "vision_tmp.jpg",
-                            "image/jpeg",
-                        )
-                        if public_url:
-                            api_contents = public_url
-                            print(f"DEBUG: Using public URL for vision: {public_url}")
-                    except Exception as vision_upload_error:
-                        print(
-                            f"DEBUG: Vision temp upload failed, fallback to data URI: {vision_upload_error}"
-                        )
-                else:
-                    # 元データが十分小さい場合も raw を保持しておく（フォールバック用）
-                    vision_raw = base64.b64encode(original_bytes).decode("utf-8")
+                finally:
+                    del reduced_bytes_for_vision
+                    gc.collect()
             except Exception as resize_error:
                 print(f"DEBUG: Vision payload preparation failed: {resize_error}")
                 api_contents = contents
                 vision_raw = None
+            finally:
+                del original_bytes
+                gc.collect()
 
         # 画像アップロード時にタグ生成フローを開始（非同期処理に移行）
         print(
@@ -1808,6 +1823,8 @@ store_data keys: {list(store_data.keys()) if store_data else "None"}
                 print(f"Photo processing failed: {photo_error}")
                 # 写真保存失敗でも製品登録は続行（photo_id = None）
             finally:
+                if "file_bytes" in locals():
+                    del file_bytes
                 if original_tmp_path and os.path.exists(original_tmp_path):
                     try:
                         os.remove(original_tmp_path)
@@ -1816,6 +1833,7 @@ store_data keys: {list(store_data.keys()) if store_data else "None"}
                         print(
                             f"DEBUG: Failed to remove temp photo file after upload: {cleanup_error}"
                         )
+                gc.collect()
         else:
             print("No photo content found, skipping photo processing")
 
