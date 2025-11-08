@@ -848,21 +848,19 @@ def handle_front_photo(
                 else:
                     original_bytes = base64.b64decode(contents)
 
-                preview_data_url = contents
+                display_data_url = contents
                 try:
                     preview_image = Image.open(io.BytesIO(original_bytes))
-                    preview_image.thumbnail((1024, 1024), Image.LANCZOS)
+                    preview_image.thumbnail((512, 512), Image.LANCZOS)
                     preview_buffer = io.BytesIO()
-                    preview_image.save(preview_buffer, format="JPEG", quality=85)
+                    preview_image.save(preview_buffer, format="JPEG", quality=80)
                     preview_b64 = base64.b64encode(preview_buffer.getvalue()).decode(
                         "utf-8"
                     )
-                    preview_data_url = f"data:image/jpeg;base64,{preview_b64}"
+                    display_data_url = f"data:image/jpeg;base64,{preview_b64}"
                     preview_image.close()
                 except Exception as preview_error:
                     print(f"DEBUG: Failed to generate preview image: {preview_error}")
-
-                display_data_url = preview_data_url
 
                 temp_file_path = None
                 try:
