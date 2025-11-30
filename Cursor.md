@@ -101,6 +101,484 @@ ALTER TABLE registration_product_information DISABLE ROW LEVEL SECURITY;
 - **ログ付き強制起動（PowerShell）**  
   `powershell -ExecutionPolicy Bypass -File .\start_with_logs.ps1`  
   ※ 起動前に既存プロセスやポート 8050 を解放し、`app_run.log` に出力を保存。
+
+#### ログ付き強制起動の具体的な手順
+
+1. **ターミナルを開く**
+   - Windows の **「Windows PowerShell」** を使用する（`cmd.exe` ではなく PowerShell 推奨）。
+2. **プロジェクトフォルダに移動する**
+   - まだ移動していない場合は、PowerShell で次を実行する:  
+     `cd C:\Users\ryone\Desktop\oshi-app`
+3. **強制ログ付きで起動するコマンドを実行**
+   - 同じ PowerShell から次のコマンドを入力して実行する:  
+     `powershell -ExecutionPolicy Bypass -File .\start_with_logs.ps1`
+   - 既に PowerShell 上にいて、実行ポリシーの変更が不要な場合は、より簡単に:  
+     `.\start_with_logs.ps1`
+4. **起動結果の確認**
+   - ブラウザで `http://127.0.0.1:8050` を開き、アプリが表示されることを確認する。
+   - 同時に、`app_run.log` に起動ログが追記される（エラー調査時はこのファイルを確認する）。
+
+#### ログ付き強制起動で使われる主な設定ファイル
+
+- **`.env`**
+  - **役割**: Supabase の URL/キー、IO Intelligence API キー、Rakuten API キーなどの**環境変数**を定義する。
+  - **使用箇所**: `app.py` の先頭で `dotenv.load_dotenv()` により読み込まれ、Supabase クライアントや外部 API 設定に利用される。
+- **`theme.txt`**
+  - **役割**: 使用中の Bootstrap テーマ名（例: `minty`）を 1 行だけ保存する。
+  - **使用箇所**: `app.py` の `load_theme()` で読み込まれ、起動時に適用するテーマ CSS が決まる。
+- **`start_with_logs.ps1`**
+  - **役割**: 上記 `.env` や `theme.txt` を使う `app.py` を、**UTF-8・アンバッファリング・詳細ログ付き**で起動する PowerShell スクリプト。
+  - **挙動**: 既存の `python` プロセスを停止し、必要な環境変数（ビジョンモデル関連など）を補完しつつ `python app.py` を実行し、その標準出力を `app_run.log` に書き出す。
+- **`app_run.log`（出力ファイル）**
+
+  - **役割**: 起動時・実行中のログを保存するテキストファイル。設定ファイルではないが、ログ付き強制起動時に毎回新しいヘッダをつけて作り直される。
+
 - **通常起動（開発確認用）**  
   `python app.py`  
   ※ 環境変数を設定した PowerShell / venv 上で実行。終了は `Ctrl+C`。
+
+## 2025-11-29 ファイル・フォルダ使用状況と削除可否メモ
+
+※ この一覧は「ルート直下に見えている主なファイル・フォルダ」の説明です。  
+※ `.git` などの隠しフォルダは省略していますが、**バージョン管理用なので削除・変更しないこと**をおすすめします。
+
+### 1. アプリ本体に必須のもの（削除しない）
+
+- **`app.py`**
+
+  - **役割**: Dash アプリ本体。画面遷移・レイアウト・コールバックなどの中心となるファイル。
+  - **削除可否**: **削除 NG**。これを消すとアプリ自体が起動できなくなります。
+
+- **`components/` フォルダ**
+
+  - **役割**: 画面のレイアウトや各ページ（ホーム・登録・レビューなど）、UI セクションをまとめたフォルダ。
+  - **削除可否**: **削除 NG**。ここを消すと画面が表示できなくなります。
+
+- **`services/` フォルダ**
+
+  - **役割**: Supabase への保存、バーコード検索、タグ抽出など、データ処理や外部サービスとのやり取りをまとめたフォルダ。
+  - **削除可否**: **削除 NG**。ここを消すと登録や検索などの機能が動かなくなります。
+
+- **`assets/` フォルダ（`styles.css`, `camera.js` など）**
+
+  - **役割**: 見た目（CSS）やカメラ関連 JavaScript を集めたフォルダ。Dash が自動で読み込む仕組みを使っています。
+  - **削除可否**: **削除 NG を推奨**。削除するとデザイン崩れやカメラ機能の不具合が出ます。
+
+- **`data/products.json`**
+
+  - **役割**: 製品情報を保存するためのローカル JSON データ。仕様メモにも出てくる基本データです。
+  - **削除可否**: **削除非推奨**。削除してもアプリは起動しますが、製品情報が失われる可能性があります。
+
+- **`requirements.txt`**
+
+  - **役割**: アプリに必要な Python ライブラリ一覧。環境構築に使います（`pip install -r requirements.txt`）。
+  - **削除可否**: **削除非推奨**。再セットアップが難しくなるので残しておくのがおすすめです。
+
+- **`spec.md`**
+  - **役割**: アプリ全体の仕様書。何を作るか・どんな機能があるかの定義。
+  - **削除可否**: **削除非推奨・編集も避ける**。上流仕様として参照専用にしておくのが安全です。
+
+### 2. テーマ・ローカルデータ・設定系（基本は残す）
+
+- **`theme.txt`**
+
+  - **役割**: 使用中の Bootstrap テーマ名（例: `minty`）を保存する設定ファイル。`app.py` が読み込みます。
+  - **削除可否**: **削除非推奨**。消すと起動時にデフォルトテーマに戻ります。壊れはしませんが、見た目が変わる可能性があります。
+
+- **`demo_database.db`**
+
+  - **役割**: ローカル環境で使う SQLite データベース。Supabase を使わない検証用のデータが入っている想定です。
+  - **削除可否**: **慎重に**。削除すると中のデータがすべて消えます。不要であることを確認できる場合のみ削除候補になります。
+
+- **`runtime.txt`**
+
+  - **役割**: 一部のホスティング（例: Heroku 系）で Python バージョンを指定する設定ファイル。
+  - **削除可否**: **削除非推奨**。将来クラウドにデプロイする際に役立つため、残しておくのがおすすめです。
+
+- **`apt.txt`**
+  - **役割**: Docker や一部の環境で追加インストールしたい OS レベルのパッケージ一覧をメモしているファイル。
+  - **削除可否**: **削除非推奨**。将来の再構築時に「何を入れていたか」が分からなくなるため、メモとして残すのが安全です。
+
+### 3. ログ・デバッグ・メモ類（アプリ動作には不要なので不要なら削除可）
+
+- **`app_run.log`**
+
+  - **役割**: `start_with_logs.ps1` でアプリを起動したときのログを溜めるファイル。エラー調査に使用。
+  - **削除可否**: **不要になったら削除 OK**。削除してもアプリは再度ログファイルを作成できます。
+
+- **`debug_log.txt` / `save_registration_debug.txt`**
+
+  - **役割**: 登録処理などの動作確認用に出力したデバッグログ。問題調査の記録です。
+  - **削除可否**: **不要になったら削除 OK**。過去のトラブルを振り返る必要が無ければ消して構いません。
+
+- **`file_write_test.txt`**
+
+  - **役割**: 「ファイル書き込みができるか」を確認するためのテスト結果メモ。
+  - **削除可否**: **削除 OK**。同じテストが必要になればまた作れます。
+
+- **`bucket_access_key_explanation.txt`**
+
+  - **役割**: Supabase Storage のバケットアクセスキーに関する説明メモ。今は不要である旨も含まれています。
+  - **削除可否**: **アプリ動作には不要なので削除可**ですが、学習・振り返り用に残しておくのも良いです。
+
+- **`final_test_guide.txt`**
+
+  - **役割**: 最終テストで何を確認するかをまとめたチェックリスト。
+  - **削除可否**: **アプリ動作には不要なので削除可**。ただし、今後のテストの参考になるため取っておくと便利です。
+
+- **`Cursor.md`（このファイル）**
+  - **役割**: 開発メモ・構成メモをまとめたドキュメント。
+  - **削除可否**: **削除非推奨**。動作には不要ですが、将来の自分や他人が構造を理解するのに役立ちます。
+
+### 4. デプロイ・インフラ関連ファイル（使わないサービスだけ削除候補）
+
+- **`Dockerfile` / `docker-compose.yml`**
+
+  - **役割**: Docker でアプリを動かすための設定。`docker-compose.yml` では `demo_database.db` や `theme.txt` をコンテナにマウントします。
+  - **削除可否**: Docker を使わない場合でも、**今後使う可能性があるなら残すのがおすすめ**。完全に Docker を使わないと決めた場合のみ削除候補です。
+
+- **`Procfile` / `render.yaml`**
+
+  - **役割**: Render などのクラウドサービス用の起動設定ファイル。`Procfile` は起動コマンドを定義します。
+  - **削除可否**: 該当サービスを使わないなら **削除してもアプリ自体には影響なし**。ただし将来のデプロイ用に残しておくと便利です。
+
+- **`setup.py` / `setup.sh`**
+
+  - **役割**: パッケージ化や初期セットアップを自動化するためのスクリプト。
+  - **削除可否**: **削除非推奨**。自動セットアップが使えなくなるため、特に理由がなければ残すのがおすすめです。
+
+- **`start_with_logs.ps1`**
+  - **役割**: Windows PowerShell からログ付きでアプリを起動する便利スクリプト。`app_run.log` に出力します。
+  - **削除可否**: 使わない場合でも **残しておくとトラブル時に便利**。どうしても整理したい場合のみ削除候補です。
+
+### 5. データベース・Supabase 関連（Supabase を使うなら残す）
+
+- **`create_tables.py` / `apply_migration.py` / `check_database.py` など**
+
+  - **役割**: データベースのテーブル作成・マイグレーション適用・状態確認を行うためのスクリプト群。
+  - **削除可否**: **削除非推奨**。DB 構造を変更・再構築したくなったときに必要になります。
+
+- **`supabase/` フォルダ（`docs/`, `migrations/`, `sql/`）**
+  - **役割**: Supabase の設定ガイド、マイグレーション SQL、ポリシー設定などをまとめた重要な資料とスクリプト。
+  - **削除可否**: Supabase を使う限り **削除 NG**。今は使っていなくても、将来の移行に備えて残しておくのがおすすめです。
+
+### 6. テストコード・バックアップスクリプト（基本は残すが最悪削除可）
+
+- **`tests/` フォルダ**
+
+  - **役割**: 自動テスト（`test_*.py`）が入っているフォルダ。仕様どおりに動いているか確認するためのコード。
+  - **削除可否**: **削除は可能だが非推奨**。テストができなくなり、将来的な改修時にバグを見つけにくくなります。
+
+- **`app_backup.py` / `fix_app.py` / `fix_app_final.py` / `clean_app.py` など**
+
+  - **役割**: 過去のバージョンや修正版を残したバックアップ・補助スクリプト。今の `app.py` を作る過程の記録です。
+  - **削除可否**: **アプリ本番動作には不要なので削除可**ですが、万一の巻き戻しや学習用サンプルとして残しておくと安心です。
+
+- **`__pycache__/` フォルダ**（ルートや `components/`, `services/` 内など）
+  - **役割**: Python が自動生成するキャッシュ（`.pyc` ファイル）を入れるフォルダ。プログラムの実行を少し速くするためのもの。
+  - **削除可否**: **いつ削除しても OK**。必要になれば Python が自動で再生成します。
+
+### 7. 仮想環境 `venv/` について
+
+- **`venv/` フォルダ**
+  - **役割**: このプロジェクト専用の Python 実行環境（ライブラリ一式）が入っています。`Scripts/python.exe` や `site-packages/` などがここにあります。
+  - **削除可否**: 理解がある場合は **削除しても OK** ですが、
+    - 削除するとインストール済みライブラリがすべて消える
+    - 再度 `python -m venv venv` と `pip install -r requirements.txt` で作り直す必要がある  
+      ため、**初心者のうちは削除しないことを強くおすすめ**します。
+
+### 8. そのほかの補足
+
+- **`.git` フォルダや `.gitignore` などの隠しファイル**
+
+  - **役割**: Git によるバージョン管理のための情報。変更履歴や無視するファイルのルールが入っています。
+  - **削除可否**: **削除 NG**。これを消すと履歴や差分管理ができなくなります。
+
+- **まとめ**
+  - 「アプリ本体（`app.py`, `components/`, `services/`, `assets/`, データファイル）」は原則削除しない。
+  - 「ログ・デバッグ・一部メモ」は、**内容を確認して不要と判断できれば削除して OK**。
+  - 「インフラ設定・Supabase 関連・テストコード・仮想環境」は、将来の変更やトラブル対応に備えて **基本は残しておく**のが安全です。
+
+## 2025-11-29 ファイル・フォルダ使用状況と削除可否メモ（ファイルツリー版）
+
+※ `.git` や `.venv` 系などの隠しフォルダも含め、**フォルダ単位で中身をまとめて判断**しています。  
+※ `venv/Lib/site-packages/` 内のライブラリ群などは数百ファイル以上あるため、**個々のファイル名ではなく「仮想環境の一部」として扱います**。
+
+### ファイルツリー（プロジェクトルート）
+
+```text
+oshi-app/
+  app.py
+  app_backup.py
+  app_run.log
+  apply_migration.py
+  apt.txt
+  assets/
+    camera.js
+    styles.css
+  bucket_access_key_explanation.txt
+  check_database.py
+  clean_app.py
+  components/
+    __init__.py
+    __pycache__/
+    layout.py
+    pages/
+      __init__.py
+      __pycache__/
+      barcode.py
+      gallery.py
+      home.py
+      photo.py
+      register.py
+      review.py
+      settings.py
+    sections/
+      __init__.py
+      __pycache__/
+      barcode_section.py
+      front_photo_section.py
+      review_section.py
+  create_tables.py
+  Cursor.md
+  data/
+    products.json
+  debug_log.txt
+  demo_database.db
+  docker-compose.yml
+  Dockerfile
+  file_write_test.txt
+  final_test_guide.txt
+  fix_app_final.py
+  fix_app.py
+  Procfile
+  README.md
+  render.yaml
+  requirements.txt
+  runtime.txt
+  save_registration_debug.txt
+  services/
+    __init__.py
+    __pycache__/
+    barcode_lookup.py
+    barcode_service.py
+    icon_service.py
+    io_intelligence.py
+    local_storage.py
+    photo_service.py
+    supabase_client.py
+    tag_extraction.py
+    tag_service.py
+  setup.py
+  setup.sh
+  spec.md
+  start_with_logs.ps1
+  supabase/
+    docs/
+      supabase_operations_guide.txt
+      supabase_policy_guide.txt
+      supabase_storage_setup_guide.txt
+      supabase_template_guide.txt
+    migrations/
+      20251023033822_create_photos_table.sql
+      20251027194213_create_complete_database_schema.sql
+      20251029030603_rename_products_to_registration_product_information.sql
+      20251029034139_create_remaining_tables_and_clear_test_data.sql
+      20251029034139_step1_clear_test_data.sql
+      20251029034139_step2_create_missing_tables.sql
+      20251029034139_step3_extend_registration_product_table.sql
+      20251029034139_step4_setup_rls_and_indexes.sql
+      20251029073606_recreate_registration_product_information.sql
+      20251029211612_add_tag_icon_columns.sql
+      20251029211613_insert_initial_tag_data.sql
+      20251029212720_create_icon_tag_table.sql
+      20251029212721_insert_initial_icons.sql
+      20251030205033_add_product_series_complete_flag.sql
+      20251031000001_add_product_group_name.sql
+    sql/
+      fix_storage_policy.sql
+      storage_policies.sql
+      supabase_policy_expanded.sql
+      supabase_schema.sql
+      supabase_setup.sql
+      table_constraints_check.sql
+      table_constraints_relax_fixed.sql
+      table_constraints_relax.sql
+  tests/
+    __init__.py
+    test_auto_fill.py
+    test_insert.py
+    test_save.py
+    test_schema.py
+    test_supabase.py
+    test_table.py
+  theme.txt
+  venv/
+    Include/
+    Lib/
+      site-packages/（多数のライブラリファイル）
+    Scripts/
+    etc/
+    share/
+    pyvenv.cfg
+```
+
+### ファイル・フォルダごとの要否一覧
+
+凡例:
+
+- **必須**: アプリの実行に実質必須。削除しない。
+- **推奨**: なくても動くが、開発や運用のために残すことを強く推奨。
+- **削除可**: アプリ本体の動作には不要。不要と判断できれば削除してよい。
+
+#### ルート直下のファイル
+
+- **`app.py`** … **必須**。Dash アプリ本体。
+- 【削除済】**`app_backup.py`** … **削除可**。`app.py` のバックアップ／過去版。巻き戻し用途がなければ不要。
+- **`app_run.log`** … **削除可**。ログファイル。不要になったら消してよい（再生成される）。
+- **`apply_migration.py`** … **推奨**。Supabase など DB マイグレーション適用用スクリプト。将来のスキーマ変更に便利。
+- **`apt.txt`** … **推奨**。Docker 等で入れた OS パッケージのメモ。環境再構築の参考。
+- 【削除済】**`bucket_access_key_explanation.txt`** … **削除可**。Supabase Storage のアクセスキー解説メモ。アプリからは参照されない。
+- **`check_database.py`** … **推奨**。DB 状態チェック用スクリプト。今後のトラブルシュートに役立つ。
+- 【削除済】**`clean_app.py`** … **削除可**。整理・クリーニング用の補助スクリプト。現在の本番動作には不要。
+- **`create_tables.py`** … **推奨**。テーブル作成スクリプト。DB を作り直す場合に必要。
+- **`Cursor.md`** … **推奨**。この開発メモ。構造理解のために残しておくと良い。
+- 【削除済】**`debug_log.txt`** … **削除可**。デバッグ時のログ。確認が終わっていれば削除可能。
+- **`demo_database.db`** … **推奨**。ローカル SQLite データベース。中身のデータが不要と確信できるなら削除候補。
+- **`docker-compose.yml`** … **推奨**。Docker で動かす設定。Docker を今後一切使わないと決めた場合のみ削除候補。
+- **`Dockerfile`** … **推奨**。コンテナビルド用。クラウド移行や他環境で便利。
+- 【削除済】**`file_write_test.txt`** … **削除可**。ファイル書き込みテスト結果。再テスト時に再作成可能。
+- 【削除済】**`final_test_guide.txt`** … **削除可**。最終テストのチェックリスト。アプリ動作には不要だが、テスト手順メモとしては有用。
+- 【削除済】**`fix_app_final.py`** … **削除可**。最終修正用スクリプトのバックアップ的なもの。歴史を残したい場合のみ保持。
+- 【削除済】**`fix_app.py`** … **削除可**。修正過程のスクリプト。現行 `app.py` が安定していれば不要。
+- **`Procfile`** … **推奨**。Render/Heroku 系の起動設定。そうしたサービスを使わないなら削除候補。
+- **`README.md`** … **推奨**。利用者向けの説明。アプリ動作には不要だが絶対残すのがおすすめ。
+- **`render.yaml`** … **推奨**。Render 用の設定ファイル。Render を使わない場合のみ削除候補。
+- **`requirements.txt`** … **必須（事実上）**。依存ライブラリ一覧。環境再構築で必須。
+- **`runtime.txt`** … **推奨**。Python バージョン指定。デプロイや再現性確保に役立つ。
+- 【削除済】**`save_registration_debug.txt`** … **削除可**。登録処理のデバッグログ。不要なら消してよい。
+- **`setup.py`** … **推奨**。パッケージ化・セットアップ用。将来の配布やインストールに便利。
+- **`setup.sh`** … **推奨**。シェルでの初期セットアップを自動化するスクリプト。
+- **`spec.md`** … **必須（仕様として）**。仕様書。編集は避け、削除もしない方がよい。
+- **`start_with_logs.ps1`** … **推奨**。ログ付き起動スクリプト。トラブル調査時に有用。
+- **`theme.txt`** … **推奨**。選択中テーマの保存ファイル。削除しても動くがテーマ設定がリセットされる。
+
+#### `assets/` 配下
+
+- **`assets/` フォルダ** … **必須**。Dash が静的ファイルを自動ロードする場所。
+- **`assets/camera.js`** … **必須**。カメラ関連のフロントエンド処理。削除すると撮影 UI が壊れる。
+- **`assets/styles.css`** … **必須**。全体のスタイル定義。削除すると見た目が大きく崩れる。
+
+#### `components/` 配下
+
+- **`components/` フォルダ** … **必須**。UI コンポーネント群。
+- **`components/__init__.py`** … **必須**。パッケージとして `components` を認識させるため。
+- **`components/layout.py`** … **必須**。共通レイアウト定義。
+- 【削除済】**`components/__pycache__/`** … **削除可**。Python のキャッシュ。消しても自動再生成される。
+
+`components/pages/`:
+
+- **`components/pages/` フォルダ** … **必須**。各ページのレイアウト。
+- **`components/pages/__init__.py`** … **必須**。ページパッケージとしての初期化。
+- 【削除済】**`components/pages/__pycache__/`** … **削除可**。キャッシュ。
+- **`components/pages/barcode.py`** … **必須**。バーコード入力ページ。
+- **`components/pages/gallery.py`** … **必須**。ギャラリー表示ページ。
+- **`components/pages/home.py`** … **必須**。ホーム画面。
+- **`components/pages/photo.py`** … **必須**。写真アップロードページ。
+- **`components/pages/register.py`** … **必須**。登録フローのページ。
+- **`components/pages/review.py`** … **必須**。レビュー画面。
+- **`components/pages/settings.py`** … **必須**。設定画面（テーマ変更など）。
+
+`components/sections/`:
+
+- **`components/sections/` フォルダ** … **必須**。ページ内の細かいセクションを切り出したもの。
+- **`components/sections/__init__.py`** … **必須**。セクションパッケージ。
+- 【削除済】**`components/sections/__pycache__/`** … **削除可**。キャッシュ。
+- **`components/sections/barcode_section.py`** … **必須**。バーコード入力 UI セクション。
+- **`components/sections/front_photo_section.py`** … **必須**。正面写真撮影セクション。
+- **`components/sections/review_section.py`** … **必須**。レビュー用 UI セクション。
+
+#### `services/` 配下
+
+- **`services/` フォルダ** … **必須**。ビジネスロジック・外部サービス呼び出しを集約。
+- **`services/__init__.py`** … **必須**。パッケージ初期化。
+- **`services/__pycache__/`** … **削除可**。キャッシュ。
+- **`services/barcode_lookup.py`** … **必須**。楽天 API などを使ってバーコードから商品情報を取得。
+- **`services/barcode_service.py`** … **必須**。バーコード画像の解析など、バーコード関連共通処理。
+- **`services/icon_service.py`** … **必須**。タグ用アイコンなどの取得処理。
+- **`services/io_intelligence.py`** … **必須**。IO Intelligence API を使った画像説明生成。
+- **`services/local_storage.py`** … **必須**。ローカル環境でのストレージ処理（ファイル保存など）。
+- **`services/photo_service.py`** … **必須**。写真保存・DB 登録まわりのロジック。
+- **`services/supabase_client.py`** … **必須**。Supabase への接続クライアント。
+- **`services/tag_extraction.py`** … **必須**。画像説明文などからタグを抽出する処理。
+- **`services/tag_service.py`** … **必須**。タグデータの取得・整形。
+
+#### 【削除済】`data/` 配下
+
+- **`data/` フォルダ** … **必須**。データファイル置き場。
+- **`data/products.json`** … **必須**。製品情報データ。削除すると登録済みデータが失われる可能性。
+
+#### `supabase/` 配下
+
+- **`supabase/` フォルダ** … **必須（Supabase 利用時）**。設定・マイグレーション一式。
+
+`supabase/docs/`:
+
+- **`supabase/docs/` フォルダ** … **推奨**。Supabase の操作ガイド群。
+- **`supabase/docs/supabase_operations_guide.txt`** … **推奨**。操作手順ガイド。
+- **`supabase/docs/supabase_policy_guide.txt`** … **推奨**。ポリシー設定の解説。
+- **`supabase/docs/supabase_storage_setup_guide.txt`** … **推奨**。Storage 設定手順。
+- **`supabase/docs/supabase_template_guide.txt`** … **推奨**。テンプレート／雛形の説明。
+
+`supabase/migrations/`:
+
+- **`supabase/migrations/` フォルダ** … **必須（Supabase 利用時）**。DB スキーマの履歴。
+- 各 `.sql` ファイル（`2025...create_photos_table.sql` 〜 `20251031000001_add_product_group_name.sql`） … **必須**。特定時点のマイグレーション。削除すると履歴が分からなくなる。
+
+`supabase/sql/`:
+
+- **`supabase/sql/` フォルダ** … **推奨**。個別 SQL スクリプトの集約。
+- **`supabase/sql/fix_storage_policy.sql`** … **推奨**。Storage ポリシー修正用。
+- **`supabase/sql/storage_policies.sql`** … **推奨**。ストレージポリシー定義。
+- **`supabase/sql/supabase_policy_expanded.sql`** … **推奨**。詳細なポリシー設定。
+- **`supabase/sql/supabase_schema.sql`** … **推奨**。スキーマ定義まとめ。
+- **`supabase/sql/supabase_setup.sql`** … **推奨**。初期セットアップ用 SQL。
+- **`supabase/sql/table_constraints_check.sql`** … **推奨**。制約チェック。
+- **`supabase/sql/table_constraints_relax_fixed.sql`** … **推奨**。制約緩和（修正版）。
+- **`supabase/sql/table_constraints_relax.sql`** … **推奨**。制約緩和用 SQL。
+
+#### `tests/` 配下
+
+- **`tests/` フォルダ** … **推奨**。自動テスト群。
+- **`tests/__init__.py`** … **推奨**。テストパッケージ化。
+- **`tests/test_auto_fill.py`** … **推奨**。自動補完機能のテスト。
+- **`tests/test_insert.py`** … **推奨**。挿入処理のテスト。
+- **`tests/test_save.py`** … **推奨**。保存処理のテスト。
+- **`tests/test_schema.py`** … **推奨**。スキーマのテスト。
+- **`tests/test_supabase.py`** … **推奨**。Supabase 関連テスト。
+- **`tests/test_table.py`** … **推奨**。テーブル関連のテスト。
+
+#### `venv/` 配下（仮想環境）
+
+- **`venv/` フォルダ** … **推奨**。このプロジェクト専用の Python 仮想環境。
+  - 中の `Lib/site-packages/` 以下には、Dash や Supabase クライアントなど多数のライブラリファイルがあり、**個々のファイルはすべて「削除可」だが、削除するならフォルダごと一括で**行うのが普通です。
+- **`venv/Include/`** … **推奨（venv と一体扱い）**。ヘッダファイル等。単体で触らない。
+- **`venv/Lib/`（`site-packages/` ほか）** … **推奨（venv と一体扱い）**。Python ライブラリ本体。
+- **`venv/Scripts/`** … **推奨**。`python.exe`, `pip.exe` など実行ファイル。
+- **`venv/etc/` / `venv/share/`** … **推奨**。Jupyter 連携などの設定。
+- **`venv/pyvenv.cfg`** … **推奨**。仮想環境の設定ファイル。
+
+> **venv 全体について**
+>
+> - ライブラリを入れ直す前提であれば **`venv/` フォルダごと削除してもよい** ですが、再度 `python -m venv venv` ＋ `pip install -r requirements.txt` が必要になります。
+> - 初学者のうちは誤って削除しない方が安全です。
+
+#### その他（隠しファイル・Git 関連）
+
+- **`.git/` フォルダ** … **必須（バージョン管理）**。削除すると履歴がすべて失われる。
+- **`.gitignore`**（存在する前提） … **推奨**。Git に無視させるファイルパターン定義。
+
+---
+
+この一覧を見れば、「どのファイルを消してよいか／残すべきか」がツリー構造と一緒に把握できるようになっています。  
+**実際の削除は行わず、判断のメモのみここに記録しています。**
