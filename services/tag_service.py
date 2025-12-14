@@ -144,3 +144,54 @@ def create_receipt_location_tag(name: str, icon: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _update_tags(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Update tags based on lookup data and image description."""
+    items = state["lookup"].get("items") or []
+    description = state["front_photo"].get("description")
+
+    print(
+        f"DEBUG: _update_tags called - items: {len(items)}, description: {bool(description)}"
+    )
+
+    # 4つのパターンを適切に処理
+    has_rakuten_data = bool(items)
+    has_image_description = bool(description)
+
+    print(
+        f"DEBUG: has_rakuten_data: {has_rakuten_data}, has_image_description: {has_image_description}"
+    )
+
+    if not has_rakuten_data and not has_image_description:
+        state["tags"] = {
+            "status": "not_ready",
+            "tags": [],
+            "message": "バーコード照合または画像説明の結果が揃うとタグを生成します。",
+        }
+        return state["tags"]
+
+    # IO Intelligence APIでタグを生成
+    print("DEBUG: Calling extract_tags...")
+    photo_content = state.get("front_photo", {}).get("content")
+    from services.tag_extraction import extract_tags
+    tag_result = extract_tags(items, description, photo_content)
+    print(f"DEBUG: extract_tags result: {tag_result}")
+
+    # タグ生成結果に応じてメッセージを調整（既にメッセージがあれば優先）
+    if tag_result["status"] == "success" and not tag_result.get("message"):
+        if has_rakuten_data and has_image_description:
+            tag_result["message"] = (
+                f"楽天API情報と画像説明から{len(tag_result['tags'])}個のタグを生成しました。"
+            )
+        elif has_rakuten_data:
+            tag_result["message"] = (
+                f"楽天API情報から{len(tag_result['tags'])}個のタグを生成しました。"
+            )
+        elif has_image_description:
+            tag_result["message"] = (
+                f"画像説明から{len(tag_result['tags'])}個のタグを生成しました。"
+            )
+
+    state["tags"] = tag_result
+    return tag_result

@@ -1,11 +1,22 @@
 from copy import deepcopy
 from dash import html
 from dash import dcc
+from dash import page_container
 
 NAV_ITEMS = [
     {"href": "/", "label": "ホーム", "icon": "bi-house", "id": "nav-home"},
-    {"href": "/register", "label": "写真を登録", "icon": "bi-camera", "id": "nav-register"},
-    {"href": "/gallery", "label": "ダッシュボード", "icon": "bi-speedometer2", "id": "nav-gallery"},
+    {
+        "href": "/register/barcode",
+        "label": "写真を登録",
+        "icon": "bi-camera",
+        "id": "nav-register",
+    },
+    {
+        "href": "/gallery",
+        "label": "ダッシュボード",
+        "icon": "bi-speedometer2",
+        "id": "nav-gallery",
+    },
     {"href": "/settings", "label": "設定", "icon": "bi-gear", "id": "nav-settings"},
 ]
 
@@ -67,12 +78,14 @@ def create_app_layout(theme_href: str):
         [
             html.Link(rel="stylesheet", href=theme_href, id="bootswatch-theme"),
             dcc.Location(id="url", refresh=False),
-            html.Div(id="page-content", className="page-container"),
+            page_container,
             _build_navigation(),
             dcc.Store(
                 id="registration-store",
                 data=deepcopy(DEFAULT_REGISTRATION_STATE),
             ),
-            html.Div(id="auto-fill-trigger", style={"display": "none"}),  # 自動反映トリガー用
+            html.Div(
+                id="auto-fill-trigger", style={"display": "none"}
+            ),  # 自動反映トリガー用
         ]
     )

@@ -1,9 +1,10 @@
 ﻿import base64
-from app import save_registration, _serialise_state, _empty_registration_state
+from app import save_registration
+from components.state_utils import serialise_state, empty_registration_state
 
 sample_image_bytes = base64.b64encode(b'SampleImageBytes').decode('ascii')
 
-state = _empty_registration_state()
+state = empty_registration_state()
 state['barcode'] = {
     'value': '1234567890123',
     'type': 'EAN-13',
@@ -30,7 +31,7 @@ state['tags'] = {
     'message': ''
 }
 
-serialized_state = _serialise_state(state)
+serialized_state = serialise_state(state)
 
 result = save_registration(
     n_clicks=1,
