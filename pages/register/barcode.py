@@ -38,3 +38,5 @@ except Exception as e:
     layout = html.Div(
         f"Barcode page error: {str(e)}", style={"color": "red", "padding": "20px"}
     )
+
+

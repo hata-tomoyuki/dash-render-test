@@ -50,3 +50,5 @@ except Exception as e:
     layout = html.Div(
         f"Review page error: {str(e)}", style={"color": "red", "padding": "20px"}
     )
+
+

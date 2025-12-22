@@ -63,7 +63,7 @@
 ## ディレクトリ案内
 
 - `app.py`: エントリ。Dash Pages、`_pages_location` 遷移、`.env` 早期読込。
-- `pages/`: Dash Pages の各ページ（barcode/photo/review/settings/home/gallery）。
+- `pages/`: Dash Pages の各ページ（`register/` 配下に登録フロー、settings/home/gallery 等）。
 - `features/`: 各機能のコールバックロジック（barcode/photo/review）。
 - `components/`: 共通 UI・ナビ・テーマ周り。
 - `services/`: Supabase や外部 API（barcode_lookup, photo_service, theme_service 等）。
