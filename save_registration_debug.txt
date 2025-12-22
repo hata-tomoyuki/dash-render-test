@@ -40,3 +40,15 @@ n_clicks: None
 product_name: 'None'
 store_data keys: ['barcode', 'front_photo', 'lookup', 'tags']
 
+=== SAVE REGISTRATION DEBUG ===
+Called at: 2025-12-22 23:43:32.003275
+n_clicks: None
+product_name: 'None'
+store_data keys: ['barcode', 'front_photo', 'lookup', 'tags']
+
+=== SAVE REGISTRATION DEBUG ===
+Called at: 2025-12-22 23:43:49.267337
+n_clicks: 1
+product_name: 'スキップできた(*´▽｀*)'
+store_data keys: ['barcode', 'front_photo', 'lookup', 'tags']
+

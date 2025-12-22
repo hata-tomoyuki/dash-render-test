@@ -14,7 +14,7 @@ def register_photo_callbacks(app):
         [
             Output("registration-store", "data", allow_duplicate=True),
             Output("front-feedback", "children"),
-            Output("nav-redirect", "pathname", allow_duplicate=True),
+            Output("_pages_location", "pathname", allow_duplicate=True),
         ],
         [
             Input("front-upload", "contents"),
@@ -43,6 +43,7 @@ def register_photo_callbacks(app):
         trigger_id = triggered[0]["prop_id"].split(".")[0]
         state = ensure_state(store_data)
         message = no_update
+        nav_path = no_update
 
         def _cleanup_temp_file() -> None:
             tmp_path = state.get("front_photo", {}).get("original_tmp_path")
@@ -56,8 +57,6 @@ def register_photo_callbacks(app):
                     )
             state["front_photo"]["original_tmp_path"] = None
             gc.collect()
-
-        url = no_update
 
         if trigger_id == "front-skip-button":
             _cleanup_temp_file()
@@ -78,8 +77,7 @@ def register_photo_callbacks(app):
             )
             message = ""
             print("DEBUG handle_front_photo: photo skipped")
-            url = no_update  # 遷移は store リスナーに任せる
-            return serialise_state(state), message, url
+            nav_path = "/register/review"
         else:
             contents = (
                 camera_contents
@@ -278,9 +276,10 @@ def register_photo_callbacks(app):
             )
 
             print("DEBUG handle_front_photo: photo uploaded successfully")
-            # 遷移は store リスナーに任せる
-            url = no_update
-            return serialise_state(state), message, url
+            nav_path = "/register/review"
+
+        print(f"DEBUG handle_front_photo: returning nav_path={nav_path}")
+        return serialise_state(state), message, nav_path
 
 
 def register_x_share_callbacks(app):

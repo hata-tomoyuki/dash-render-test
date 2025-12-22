@@ -1,5 +1,5 @@
 import dash
-from dash import Input, Output, State, html, dcc
+from dash import Input, Output, State, html, dcc, no_update
 from dash.exceptions import PreventUpdate
 from copy import deepcopy
 
@@ -65,7 +65,7 @@ def create_app() -> dash.Dash:
 
     # /register への直接アクセスを /register/barcode にリダイレクト
     @app.callback(
-        Output("nav-redirect", "pathname", allow_duplicate=True),
+        Output("_pages_location", "pathname", allow_duplicate=True),
         Input("_pages_location", "pathname"),
     )
     def _redirect_register(pathname):
@@ -75,27 +75,29 @@ def create_app() -> dash.Dash:
             raise PreventUpdate
         raise PreventUpdate
 
-    # registration-store の状態に応じて自動遷移（初回アクセスも発火）
+    # /register/barcode に外部から入ったときだけ registration-store を初期化
     @app.callback(
-        Output("nav-redirect", "pathname", allow_duplicate=True),
-        Input("registration-store", "data"),
+        [
+            Output("nav-history-store", "data"),
+            Output("registration-store", "data", allow_duplicate=True),
+        ],
+        Input("_pages_location", "pathname"),
+        State("nav-history-store", "data"),
         prevent_initial_call=False,
     )
-    def _auto_nav_from_store(store_data):
-        if not store_data:
-            raise PreventUpdate
-        barcode_status = store_data.get("barcode", {}).get("status")
-        photo_status = store_data.get("front_photo", {}).get("status")
+    def _reset_store_on_register(pathname, history):
+        prev_path = None
+        if isinstance(history, dict):
+            prev_path = history.get("prev")
 
-        # STEP1 -> STEP2
-        if barcode_status in {"captured", "manual", "skipped"}:
-            return "/register/photo"
+        reset_needed = pathname == "/register/barcode" and (
+            not prev_path or not str(prev_path).startswith("/register")
+        )
 
-        # STEP2 -> STEP3
-        if photo_status in {"captured", "skipped"}:
-            return "/register/review"
+        if reset_needed:
+            return {"prev": pathname}, deepcopy(empty_registration_state())
 
-        raise PreventUpdate
+        return {"prev": pathname}, no_update
 
     # レイアウト設定（page_container を中央寄せ＆最大幅でラップ）
     app.layout = html.Div(
@@ -105,7 +107,6 @@ def create_app() -> dash.Dash:
                 href=get_bootswatch_css(load_theme()),
                 id="bootswatch-theme",
             ),
-            dcc.Location(id="nav-redirect", refresh=False),  # 独自遷移用
             html.Div(
                 dash.page_container, className="page-container"
             ),  # ページ内容を中央寄せ＋最大幅でラップ
@@ -113,6 +114,7 @@ def create_app() -> dash.Dash:
             dcc.Store(
                 id="registration-store", data=deepcopy(empty_registration_state())
             ),
+            dcc.Store(id="nav-history-store", data={"prev": None}),
             html.Div(id="auto-fill-trigger", style={"display": "none"}),
         ]
     )

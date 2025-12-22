@@ -129,7 +129,7 @@ def register_barcode_callbacks(app):
         [
             Output("registration-store", "data", allow_duplicate=True),
             Output("barcode-feedback", "children"),
-            Output("nav-redirect", "pathname", allow_duplicate=True),
+            Output("_pages_location", "pathname", allow_duplicate=True),
         ],
         [
             Input("barcode-upload", "contents"),
@@ -214,6 +214,7 @@ def register_barcode_callbacks(app):
                 "keyword": None,
             }
             message = ""
+            nav_path = "/register/photo"
         elif trigger_id == "barcode-retry-button":
             state["barcode"] = empty_registration_state()["barcode"].copy()
             state["lookup"] = empty_registration_state()["lookup"].copy()
@@ -252,6 +253,7 @@ def register_barcode_callbacks(app):
                 state["lookup"] = lookup_result
                 print(f"DEBUG: Saved lookup to state: {state.get('lookup')}")
                 message = success_message(barcode_value, "MANUAL", lookup_result)
+                nav_path = "/register/photo"
         elif trigger_id in {"barcode-upload", "barcode-camera-upload"}:
             contents = (
                 camera_contents
@@ -328,11 +330,15 @@ def register_barcode_callbacks(app):
                     message = success_message(
                         barcode_value, barcode_type, lookup_result
                     )
+                    nav_path = "/register/photo"
 
-        print(f"DEBUG: Calling _update_tags after barcode processing")
+        print(
+            f"DEBUG: Calling _update_tags after barcode processing (trigger_id={trigger_id}, nav_path={nav_path})"
+        )
         _update_tags(state)
 
-        url = no_update  # 遷移は store リスナーに任せる
+        url = nav_path
+        print(f"DEBUG: Returning nav_path={url}")
         if state["barcode"]["status"] in ["captured", "error"]:
             message = html.Div(
                 [

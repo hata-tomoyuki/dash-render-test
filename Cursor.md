@@ -2,7 +2,7 @@
 
 ## 概要
 
-- Dash Pages を使用し、`nav-redirect` に pathname を書き込んで遷移する構成。`app.py` で `.env` を最初に読み込み、`create_app()` が `app` / `server` を生成（Gunicorn は `app:server` を起動）。
+- Dash Pages を使用し、`_pages_location.pathname` を更新してページ遷移する構成。`app.py` で `.env` を最初に読み込み、`create_app()` が `app` / `server` を生成（Gunicorn は `app:server` を起動）。
 - Supabase 未設定でも UI は起動するが、保存・ギャラリー・テーマ永続化は無効。
 
 ## 起動手順（PowerShell）
@@ -30,11 +30,11 @@
 ## 登録 3 ステップ仕様（正しい挙動）
 
 - URL: `/register/barcode` → `/register/photo` → `/register/review`。`/register` 直叩きは `/register/barcode` へリダイレクト。
-- 自動遷移の責務: 各ステップで `registration-store` の状態を更新し、`app.py` がそれを監視して `nav-redirect.pathname` を更新する。
+- 自動遷移の責務: 各ステップのコールバックが成功/スキップ時に `_pages_location.pathname` を更新して次ページへ進める。
   - バーコード: `status in {captured, manual, skipped}` → `/register/photo`
   - 正面写真: `status in {captured, skipped}` → `/register/review`
 - 楽天 API 結果やタグはレビュー画面で表示。
-- 注意（既知不具合）: 現在の `app.py` は判定順の都合でレビューに進みにくいケースあり。要修正予定。
+- 注意: 「ナビから登録開始したら常に新規開始」のため、`/register/barcode` に外部から入った場合は `registration-store` を初期化する。
 
 ## Supabase 接続確認（ローカル）
 
@@ -56,13 +56,13 @@
 ## よくある不具合と確認ポイント
 
 - 画面が出ない/真っ白: ブラウザコンソールの赤エラーと `/_dash-update-component` を確認。DuplicateCallback エラー時は `allow_duplicate=True` を付ける。
-- 自動遷移しない: `registration-store` の status 更新と `nav-redirect.pathname` 更新有無を確認（現状判定順の既知不具合あり）。
+- 自動遷移しない: `registration-store` の status 更新と `_pages_location.pathname` が更新されているかを確認。
 - Supabase 取得失敗: Network タブで `supabase.co` のレスポンスを確認。`permission denied` は RLS、`0 rows` はデータ不足。
 - カメラ不具合: `assets/camera.js` がロードされているか、ブラウザのカメラ許可を確認。
 
 ## ディレクトリ案内
 
-- `app.py`: エントリ。Dash Pages、`nav-redirect` 遷移、`.env` 早期読込。
+- `app.py`: エントリ。Dash Pages、`_pages_location` 遷移、`.env` 早期読込。
 - `pages/`: Dash Pages の各ページ（barcode/photo/review/settings/home/gallery）。
 - `features/`: 各機能のコールバックロジック（barcode/photo/review）。
 - `components/`: 共通 UI・ナビ・テーマ周り。

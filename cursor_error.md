@@ -13,7 +13,7 @@ libzbar-dev
 
 Flask Dash は内部で Flask を使っていますが、Render での依存解決を安定させるために明示的に書いておくと安心です。
 
-gunicorn Render は本番環境で python app.py ではなく WSGI サーバーを使うのが推奨です。 → gunicorn app:app のように起動することで安定稼働します。
+gunicorn Render は本番環境で python app.py ではなく WSGI サーバーを使うのが推奨です。 → Dash の場合は `server = app.server` を公開し、`gunicorn app:server` のように起動することで安定稼働します。
 
 Procfile の基本
 ファイル名は必ず Procfile（拡張子なし）
@@ -37,17 +37,44 @@ server = app.server # ← これを定義しておく
 
 ## エラー 3 個目
 
-【解決方法の可能性】⇒ 表示されず
-registration-store を同じプロパティで更新するコールバックが複数あるため、最初のコールバック（バーコード処理側）の Output("registration-store", "data") に allow_duplicate=True を設定しました。Dash では同一 Output を複数コールバックで扱う際にこれを明示しないとアプリ起動時に DuplicateCallbackOutput エラーで画面が描画されません [^dash]。今回表示されなかった原因はこの設定漏れです。
-【写真を登録画面のエラー解決策】
-sync_tag_checklist と add_custom_tag の両方で tag-checklist（options/value）に出力していたため、Dash の「DuplicateCallbackOutput」保護機構が働き、/register ページのみ 500 エラーで空白表示になっていました。
-allow_duplicate=True を追加し、双方のコールバックで同じ Output を扱えるように修正しました。
-既存の registration-store に対する複数更新も同様に allow_duplicate=True を設定済み。
-【今回の根本的な解決策】
-修正しました。問題は、components/sections/barcode_section.py と components/sections/front_photo_section.py で dcc.Upload コンポーネントに無効なキーワード引数 \*\*{"data-camera-upload": "barcode"} を渡していたため、TypeError が発生していました。これにより render_register_page() が例外を投げ、ページが表示されていませんでした。
-dcc.Upload は data- 属性を受け付けないため、これを削除しました。JavaScript は id から判断して動作します。
+### 3-1. DuplicateCallbackOutput（同一 Output を複数 callback が更新）
 
-# コールドバック（ページ遷移エラー）の改善策
+registration-store や checklist など、同じコンポーネントの同じプロパティを複数 callback で更新する場合、Dash の保護機構により起動時エラーや 500/空白表示になることがあります。
+
+【対策】
+
+- 同一 Output を複数 callback が更新する必要がある場合は、該当 Output に `allow_duplicate=True` を付ける
+- `prevent_initial_callbacks="initial_duplicate"` 等と組み合わせて、初期発火の競合を避ける
+
+### 3-2. dcc.Upload へ無効な属性を渡してレイアウトが例外で落ちる
+
+【原因】
+
+- `dcc.Upload(...)` に `data-` 属性など、Dash コンポーネントが受け付けないキーワード引数を渡すと `TypeError` になり、ページの `layout` 生成自体が失敗して空白表示になります
+
+【対策】
+
+- `dcc.Upload` には無効な属性を渡さない（必要な `data-` 属性は `html.*` 側に付ける）
+
+## エラー 4 個目（今回）: /register の自動遷移が動かない（スキップしても進まない）
+
+【症状】
+
+- STEP1/STEP2 で「スキップ」「アップロード成功」「撮影成功」をしても、次のページに自動遷移しない
+- ログ上は callback が遷移先パスを返しているのに画面が切り替わらない
+
+【原因（根本）】
+
+- Dash Pages（`use_pages=True`）は内部の `dcc.Location(id="_pages_location")` の `pathname` 変化をトリガーに `dash.page_container` を更新します
+- 以前は独自の `dcc.Location(id="nav-redirect")` を更新していたため、Pages 側が反応せず「返しているのに遷移しない」状態になっていました
+
+【対策（今回の改善）】
+
+- 自動遷移の Output 先を **`Output("_pages_location", "pathname")` に統一**する
+- 競合/混乱を避けるため、`nav-redirect` 用 `dcc.Location` は削除する
+- `debug=False` のときはホットリロードされないため、修正反映にはサーバー再起動が必要
+
+# コールバック（ページ遷移エラー）の改善策
 
 ## 基本的な注意点
 
@@ -77,11 +104,13 @@ dcc.Upload は data- 属性を受け付けないため、これを削除しま�
 
 - 階層追加後に Output や Input の対象が存在しないと Dash がエラーを出してページ描画を止めてしまう  
   【対策】
-- 自動範囲は、dcc.Location の href を更新する
+- 未描画/未存在のタイミングでは更新しない（`PreventUpdate` / `dash.no_update` を使う）
 
 ### 5.dcc.Location の更新が正しく反映されていない
 
 - ページ遷移に使う dcc.Location の pathname を更新しても、対応するレイアウトが返さないと、空白ページになります
+  【対策】
+  - Dash Pages を使っている場合は `_pages_location.pathname` を更新する（独自 Location を更新しても `dash.page_container` は反応しない）
 
 ### 6.ページレイアウトが None になっている
 
