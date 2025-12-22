@@ -6,7 +6,7 @@ Apply Mode: Always Apply
 
 # 最低限のファイル構成
 
-- app.py # Dash アプリのメインファイル
+- app.py # Dash エントリ(use_pages=True に変更)
 - server.py # Flask(Supabase JWT 保護の入口)
 - pages/ # ルーティング対象（登録+レイアウト+ページ固有 callback）
   - home.py
@@ -16,14 +16,12 @@ Apply Mode: Always Apply
     - controller.py # コールバック(UI⇔services の橋渡し)
 - components/ # 再利用可能なコンポーネント・UI 部分（ページ横断のナビ、ヘッダー、フッター、モーダル等）
   - layout.py # 全体レイアウト構成
-  - upload_section.py # 画像・バーコードアップロード UI
-- services/ # ロジック(API 呼び出し・照合処理など）※UI 非依存
+- services/ # ロジック（API 呼び出し・照合処理など）※UI 非依存
   - barcode_service.py # バーコード解析
   - photo_service.py # 画像ストレージ・DB への CRUD
   - barcode_lookup.py # 楽天 API などでバーコード照合
   - image_description.py # IO Intelligence API で画像説明生成
   - tag_extraction.py # タグ抽出処理
-  - db_handler.py # DB 登録・取得処理
 - assets/ # CSS や画像などの静的ファイル
   - styles.css # デザイン調整用 CSS
   - camera.js
@@ -33,7 +31,6 @@ Apply Mode: Always Apply
     - file_structure.md # フォルダ構成指示
     - spec.md # Cursor に伝えるようの仕様書
     - database_configuration.md # データベース構成指示
-- apt.txt # 使用ライブラリ一覧（OS レベル）
 - requirements.txt # 使用ライブラリ一覧（Python レベル）
 - .env # API キーなどの環境変数
 - .env.example # API キーなどの環境変数テンプレート
@@ -46,5 +43,23 @@ Apply Mode: Always Apply
 
 # 注意事項
 
-他に必要なファイルがあれば、残してください
-不要なファイルやフォルダは、開発者に確認後に消去してください
+- 他に必要なファイルがあれば、残してください
+- 不要なファイルやフォルダは、開発者に確認後に消去してください
+- フレームワークの Dash 公式のページ機能とコールバックを参照して、エラーが出ないようにファイル分けしてください[https://dash.plotly.com/urls?from_column=20423&from=20423](https://dash.plotly.com/urls?from_column=20423&from=20423)
+- UI とロジックは、ファイルを分けてください
+- 将来的にフロントエンド：React + バックエンド：Python にできるようなファイル構成にしてください
+
+# サイトマップ
+
+- /（ホーム）
+  - 定義: pages/home.py
+- /register/barcode（登録 STEP1: バーコード）
+  - 定義: pages/register/barcode.py
+  - /register/photo（登録 STEP2: 正面写真）
+    - 定義: pages/register/photo.py
+  - /register/review（登録 STEP3: 確認・登録）
+    - 定義: pages/review.py
+- /gallery（ダッシュボード/ギャラリー）
+  - 定義: pages/gallery.py
+- /settings（設定）
+  - 定義: pages/settings.py
