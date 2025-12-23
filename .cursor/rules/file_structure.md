@@ -20,7 +20,6 @@ Apply Mode: Always Apply
   - barcode_service.py # バーコード解析
   - photo_service.py # 画像ストレージ・DB への CRUD
   - barcode_lookup.py # 楽天 API などでバーコード照合
-  - image_description.py # IO Intelligence API で画像説明生成
   - tag_extraction.py # タグ抽出処理
 - assets/ # CSS や画像などの静的ファイル
   - styles.css # デザイン調整用 CSS
@@ -46,8 +45,8 @@ Apply Mode: Always Apply
 - 他に必要なファイルがあれば、残してください
 - 不要なファイルやフォルダは、開発者に確認後に消去してください
 - フレームワークの Dash 公式のページ機能とコールバックを参照して、エラーが出ないようにファイル分けしてください[https://dash.plotly.com/urls?from_column=20423&from=20423](https://dash.plotly.com/urls?from_column=20423&from=20423)
-- UI とロジックは、ファイルを分けてください
-- 将来的にフロントエンド：React + バックエンド：Python にできるようなファイル構成にしてください
+- UI とロジックは、ファイルを機能別に 1 機能ずつ分けてください
+- 将来的にフロントエンド：React(Next.js) + バックエンド：Python にできるようなファイル構成にしてください
 
 # サイトマップ
 
@@ -59,7 +58,9 @@ Apply Mode: Always Apply
     - 定義: pages/register/photo.py
   - /register/review（登録 STEP3: 確認・登録）
     - 定義: pages/review.py
-- /gallery（ダッシュボード/ギャラリー）
+- /gallery（ギャラリー）
   - 定義: pages/gallery.py
+- /dashboard（ダッシュボード）
+  - 定義: pages/dashboard.py
 - /settings（設定）
   - 定義: pages/settings.py

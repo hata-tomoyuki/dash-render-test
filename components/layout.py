@@ -12,9 +12,15 @@ NAV_ITEMS = [
         "id": "nav-register",
     },
     {
-        "href": "/gallery",
+        "href": "/dashboard",
         "label": "ダッシュボード",
         "icon": "bi-speedometer2",
+        "id": "nav-dashboard",
+    },
+    {
+        "href": "/gallery",
+        "label": "ギャラリー",
+        "icon": "bi-images",
         "id": "nav-gallery",
     },
     {"href": "/settings", "label": "設定", "icon": "bi-gear", "id": "nav-settings"},
