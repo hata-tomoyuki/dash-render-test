@@ -12,7 +12,7 @@ Apply Mode: Always Apply
   - home.py
 - features/ # 機能別モジュール（UI 断片・コールバックサービスの結合部）
   - barcode/
-    - componets.py # UI 断片（ページ固有の UI）
+    - components.py # UI 断片（ページ固有の UI）
     - controller.py # コールバック(UI⇔services の橋渡し)
 - components/ # 再利用可能なコンポーネント・UI 部分（ページ横断のナビ、ヘッダー、フッター、モーダル等）
   - layout.py # 全体レイアウト構成
@@ -34,7 +34,7 @@ Apply Mode: Always Apply
 - .env # API キーなどの環境変数
 - .env.example # API キーなどの環境変数テンプレート
 - README.md # プロジェクト説明・使い方・構成
-- Cursor.md # Cursor が修正した内容説明
+- cursor.md # Cursor が修正した内容説明
 - cursor_error.md # Cursor と開発者の共同エラー解決記録
 - .gitignore
 - Dockerfile # Render の起動に必要。Python だけでは、写真が無理だった。
@@ -52,12 +52,6 @@ Apply Mode: Always Apply
 
 - /（ホーム）
   - 定義: pages/home.py
-- /register/barcode（登録 STEP1: バーコード）
-  - 定義: pages/register/barcode.py
-  - /register/photo（登録 STEP2: 正面写真）
-    - 定義: pages/register/photo.py
-  - /register/review（登録 STEP3: 確認・登録）
-    - 定義: pages/review.py
 - /gallery（ギャラリー）
   - 定義: pages/gallery/index.py
   - /gallery（ギャラリー：詳細ページ）
@@ -66,6 +60,28 @@ Apply Mode: Always Apply
   - 定義: pages/dashboard.py
 - /settings（設定）
   - 定義: pages/settings.py
+
+## サイトマップの登録分岐詳細＆複雑なページ遷移詳細
+
+- /register/select （グッズ登録（クイック追加：写真撮影のみ）」「グッズ登録（写真・タグ付け）」「書籍登録」の分岐 UI）
+
+### 【グッズ登録（クイック追加：写真撮影のみ】select→barcode→photo→ 写真保存 → 成功表示 →/register/barcode に戻る（連続登録）
+
+- /register/barcode（登録 STEP1: バーコード）
+  - 定義: pages/register/barcode.py
+- /register/photo（登録 STEP2: 正面写真）
+  - 定義: pages/register/photo.py
+
+### 【グッズ登録（写真・タグ付け）】select→barcode→photo→review→ 成功表示
+
+- /register/barcode（登録 STEP1: バーコード）
+  - 定義: pages/register/barcode.py
+- /register/photo（登録 STEP2: 正面写真）
+  - 定義: pages/register/photo.py
+- /register/review（登録 STEP3: 確認・登録）
+  - 定義: pages/register/review.py
+
+### 書籍登録【準備中】select→
 
 # 複雑なページ遷移詳細
 
