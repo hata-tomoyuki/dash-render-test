@@ -63,15 +63,15 @@ def create_app() -> dash.Dash:
     register_review_callbacks(app)
     register_theme_callbacks(app)
 
-    # /register への直接アクセスを /register/barcode にリダイレクト
+    # /register への直接アクセスを /register/select にリダイレクト
     @app.callback(
         Output("_pages_location", "pathname", allow_duplicate=True),
         Input("_pages_location", "pathname"),
     )
     def _redirect_register(pathname):
         if pathname == "/register":
-            return "/register/barcode"
-        if pathname == "/register/barcode":
+            return "/register/select"
+        if pathname in {"/register/barcode", "/register/select"}:
             raise PreventUpdate
         raise PreventUpdate
 

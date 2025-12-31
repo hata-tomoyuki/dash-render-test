@@ -14,6 +14,9 @@
 - データベースは、SUPABASE
 - アイコンは、Bootstrap Icons
   - [https://icons.getbootstrap.com/#accessibility](https://icons.getbootstrap.com/#accessibility)
+- UI：
+  - [https://www.dash-bootstrap-components.com/docs/](https://www.dash-bootstrap-components.com/docs/)
+  - [https://bootswatch.com/](https://bootswatch.com/)
 
 # 機能要件
 

@@ -56,6 +56,7 @@
 ## よくある不具合と確認ポイント
 
 - 画面が出ない/真っ白: ブラウザコンソールの赤エラーと `/_dash-update-component` を確認。DuplicateCallback エラー時は `allow_duplicate=True` を付ける。
+- エラー共有方法：Console で Duplicate callback outputs をテキスト検索
 - 自動遷移しない: `registration-store` の status 更新と `_pages_location.pathname` が更新されているかを確認。
 - Supabase 取得失敗: Network タブで `supabase.co` のレスポンスを確認。`permission denied` は RLS、`0 rows` はデータ不足。
 - カメラ不具合: `assets/camera.js` がロードされているか、ブラウザのカメラ許可を確認。

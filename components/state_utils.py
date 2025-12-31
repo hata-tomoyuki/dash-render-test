@@ -4,6 +4,13 @@ from typing import Any, Dict
 def empty_registration_state() -> Dict[str, Any]:
     """初期状態の登録ストアを返す。"""
     return {
+        "meta": {
+            # 現在のフロー: goods_full / goods_quick / book（今は goods_full を既定に）
+            "flow": "goods_full",
+            # 直近の保存結果（バナー表示用）
+            "last_save_message": None,
+            "last_save_status": None,
+        },
         "barcode": {
             "value": None,
             "type": None,
@@ -44,6 +51,15 @@ def ensure_state(data: Dict[str, Any]) -> Dict[str, Any]:
     state = empty_registration_state()
     if not isinstance(data, dict):
         return state
+
+    meta = data.get("meta") or {}
+    state["meta"].update(
+        {
+            "flow": meta.get("flow", state["meta"]["flow"]),
+            "last_save_message": meta.get("last_save_message"),
+            "last_save_status": meta.get("last_save_status"),
+        }
+    )
 
     barcode = data.get("barcode") or {}
     state["barcode"].update(
@@ -101,6 +117,11 @@ def ensure_state(data: Dict[str, Any]) -> Dict[str, Any]:
 def serialise_state(state: Dict[str, Any]) -> Dict[str, Any]:
     """状態をコピーして安全に返す（副作用防止）。"""
     return {
+        "meta": {
+            "flow": state["meta"].get("flow"),
+            "last_save_message": state["meta"].get("last_save_message"),
+            "last_save_status": state["meta"].get("last_save_status"),
+        },
         "barcode": state["barcode"].copy(),
         "front_photo": state["front_photo"].copy(),
         "lookup": {

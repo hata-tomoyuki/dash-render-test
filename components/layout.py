@@ -6,7 +6,7 @@ from dash import page_container
 NAV_ITEMS = [
     {"href": "/", "label": "ホーム", "icon": "bi-house", "id": "nav-home"},
     {
-        "href": "/register/barcode",
+        "href": "/register/select",
         "label": "写真を登録",
         "icon": "bi-camera",
         "id": "nav-register",

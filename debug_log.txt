@@ -11,3 +11,8 @@ DEBUG: front_photo content exists: False
 DEBUG: Successfully saved product - Name: スキップできた(*´▽｀*), Photo ID: None
 DEBUG: Returning success message
 DEBUG: n_clicks is falsy, raising PreventUpdate
+DEBUG: n_clicks is falsy, raising PreventUpdate
+DEBUG: front_photo data: {'content': None, 'filename': None, 'content_type': None, 'status': 'skipped', 'description': None, 'model_used': None, 'description_status': 'skipped', 'vision_source': None, 'vision_raw': None, 'structured_data': None, 'original_tmp_path': None}
+DEBUG: front_photo content exists: False
+DEBUG: Successfully saved product - Name: 分岐完了！, Photo ID: None
+DEBUG: Returning success message
