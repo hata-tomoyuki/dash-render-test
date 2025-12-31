@@ -51,10 +51,10 @@ def render_select_page() -> html.Div:
                     html.Div(
                         _card(
                             title="グッズ登録（クイック追加：写真撮影のみ）",
-                            description="準備中です。実装完了までお待ちください。",
+                            description="バーコードまたは正面写真のどちらかで登録できます。タグ生成は行いません。",
                             button_id="select-quick",
-                            color="#6c757d",
-                            disabled=True,
+                            color="#3f86ff",
+                            disabled=False,
                         ),
                         className="col-md-4 mb-3",
                     ),
@@ -138,12 +138,14 @@ def handle_select(quick, full, book, store_data):
             "写真・タグ付けフローを開始します。バーコード取得画面へ移動します。"
         )
 
-    if trigger_id in {"select-quick", "select-book"}:
-        message = (
-            "クイック追加は現在準備中です。"
-            if trigger_id == "select-quick"
-            else "書籍登録は現在準備中です。"
+    if trigger_id == "select-quick":
+        new_state = _init_flow_state("goods_quick")
+        return serialise_state(new_state), "/register/barcode", _info(
+            "クイック追加フローを開始します。バーコードまたは正面写真のいずれかで登録できます。"
         )
+
+    if trigger_id == "select-book":
+        message = "書籍登録は現在準備中です。"
         return serialise_state(state), no_update, _info(message)
 
     return serialise_state(state), no_update, no_update

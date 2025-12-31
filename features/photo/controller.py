@@ -4,9 +4,13 @@ import tempfile
 from dash import html, callback_context, no_update, Input, Output, State
 from dash.exceptions import PreventUpdate
 
-from components.state_utils import ensure_state, serialise_state
+from components.state_utils import ensure_state, serialise_state, empty_registration_state
 from services.photo_service import upload_to_storage
 from services.supabase_client import get_supabase_client
+from services.registration_service import (
+    save_quick_registration_with_photo,
+    save_quick_registration_barcode_only,
+)
 
 
 def register_photo_callbacks(app):
@@ -42,6 +46,7 @@ def register_photo_callbacks(app):
 
         trigger_id = triggered[0]["prop_id"].split(".")[0]
         state = ensure_state(store_data)
+        flow = state.get("meta", {}).get("flow") or "goods_full"
         message = no_update
         nav_path = no_update
 
@@ -77,7 +82,39 @@ def register_photo_callbacks(app):
             )
             message = ""
             print("DEBUG handle_front_photo: photo skipped")
-            nav_path = "/register/review"
+
+            if flow == "goods_full":
+                nav_path = "/register/review"
+            else:
+                # goods_quick: 写真なしでスキップ
+                barcode_value = state["barcode"].get("value")
+                if barcode_value:
+                    result = save_quick_registration_barcode_only(serialise_state(state))
+                    status = result.get("status")
+                    result_state = result.get("state", serialise_state(state))
+                    if status == "success":
+                        new_state = empty_registration_state()
+                        new_state["meta"]["flow"] = "goods_quick"
+                        new_state["meta"]["last_save_message"] = result.get("message")
+                        new_state["meta"]["last_save_status"] = status
+                        message = html.Div(result.get("message"), className="alert alert-success")
+                        nav_path = "/register/barcode"
+                        return serialise_state(new_state), message, nav_path
+                    if status == "business_error":
+                        message = html.Div(result.get("message"), className="alert alert-danger")
+                        nav_path = no_update
+                        return result_state, message, nav_path
+                    message = html.Div(result.get("message"), className="alert alert-danger")
+                    nav_path = no_update
+                    return result_state, message, nav_path
+                else:
+                    # 両方なし → 登録せず barcode へ戻して注意喚起
+                    new_state = empty_registration_state()
+                    new_state["meta"]["flow"] = "goods_quick"
+                    new_state["meta"]["last_save_message"] = "バーコードまたは正面写真のどちらかが必要です。"
+                    new_state["meta"]["last_save_status"] = "business_error"
+                    nav_path = "/register/barcode"
+                    return serialise_state(new_state), message, nav_path
         else:
             contents = (
                 camera_contents
@@ -226,57 +263,87 @@ def register_photo_callbacks(app):
                         del original_bytes
                     gc.collect()
 
-            # 画像アップロード時にタグ生成フローを開始（非同期処理に移行）
-            print(
-                f"DEBUG: Tag generation marked as loading - lookup items: {len(state['lookup'].get('items', []))}, photo uploaded: True"
-            )
-            state["front_photo"]["description"] = None
-            state["front_photo"]["model_used"] = None
-            state["front_photo"]["structured_data"] = None
-            state["front_photo"]["description_status"] = "pending"
-            state["front_photo"]["vision_source"] = api_contents
-            state["front_photo"]["vision_raw"] = vision_raw
+            # goods_full と goods_quick で処理を分岐
+            if flow == "goods_full":
+                # 画像アップロード時にタグ生成フローを開始（非同期処理に移行）
+                print(
+                    f"DEBUG: Tag generation marked as loading - lookup items: {len(state['lookup'].get('items', []))}, photo uploaded: True"
+                )
+                state["front_photo"]["description"] = None
+                state["front_photo"]["model_used"] = None
+                state["front_photo"]["structured_data"] = None
+                state["front_photo"]["description_status"] = "pending"
+                state["front_photo"]["vision_source"] = api_contents
+                state["front_photo"]["vision_raw"] = vision_raw
 
-            # 直前までのタグは保持しつつ、ステータスのみ更新
-            state["tags"]["status"] = "loading"
-            state["tags"]["message"] = "タグを生成中です..."
+                # 直前までのタグは保持しつつ、ステータスのみ更新
+                state["tags"]["status"] = "loading"
+                state["tags"]["message"] = "タグを生成中です..."
 
-            preview_card = html.Div(
-                [
-                    html.Div(
-                        "正面写真を取得しました。",
-                        style={
-                            "color": "#4caf50",
-                            "fontWeight": "600",
-                            "marginBottom": "8px",
-                        },
-                    ),
-                    html.Img(
-                        src=display_data_url,
-                        style={
-                            "width": "100%",
-                            "maxHeight": "300px",
-                            "objectFit": "contain",
-                            "borderRadius": "15px",
-                        },
-                    ),
-                ],
-                className="card-custom",
-            )
+                preview_card = html.Div(
+                    [
+                        html.Div(
+                            "正面写真を取得しました。",
+                            style={
+                                "color": "#4caf50",
+                                "fontWeight": "600",
+                                "marginBottom": "8px",
+                            },
+                        ),
+                        html.Img(
+                            src=display_data_url,
+                            style={
+                                "width": "100%",
+                                "maxHeight": "300px",
+                                "objectFit": "contain",
+                                "borderRadius": "15px",
+                            },
+                        ),
+                    ],
+                    className="card-custom",
+                )
 
-            # IOインテリジェンスの処理をバックグラウンドで開始
-            # ここでは状態のみ更新し、実際の処理は後で行う
-            state["description"] = {"status": "processing"}
-            state["front_photo"]["content"] = display_data_url
+                # IOインテリジェンスの処理をバックグラウンドで開始
+                # ここでは状態のみ更新し、実際の処理は後で行う
+                state["description"] = {"status": "processing"}
+                state["front_photo"]["content"] = display_data_url
 
-            cards = [preview_card]
-            message = html.Div(cards)
-            print(
-                f"DEBUG handle_front_photo: photo processing started, status={state['front_photo']['status']}"
-            )
+                cards = [preview_card]
+                message = html.Div(cards)
+                print(
+                    f"DEBUG handle_front_photo: photo processing started, status={state['front_photo']['status']}"
+                )
 
-            print("DEBUG handle_front_photo: photo uploaded successfully")
-            nav_path = "/register/review"
+                print("DEBUG handle_front_photo: photo uploaded successfully")
+                nav_path = "/register/review"
+            else:
+                # goods_quick: ここで即保存（タグ生成はスキップ）
+                state["front_photo"]["content"] = display_data_url
+
+                result = save_quick_registration_with_photo(serialise_state(state))
+                status = result.get("status")
+                result_state = result.get("state", serialise_state(state))
+
+                if status == "success":
+                    new_state = empty_registration_state()
+                    new_state["meta"]["flow"] = "goods_quick"
+                    new_state["meta"]["last_save_message"] = result.get("message")
+                    new_state["meta"]["last_save_status"] = status
+                    message = html.Div(result.get("message"), className="alert alert-success")
+                    nav_path = "/register/barcode"
+                    return serialise_state(new_state), message, nav_path
+
+                if status == "business_error":
+                    message = html.Div(result.get("message"), className="alert alert-danger")
+                    nav_path = no_update
+                    return result_state, message, nav_path
+
+                message = html.Div(
+                    result.get("message", "保存中にエラーが発生しました。"),
+                    className="alert alert-danger",
+                )
+                nav_path = no_update
+                return result_state, message, nav_path
 
         print(f"DEBUG handle_front_photo: returning nav_path={nav_path}")
         return serialise_state(state), message, nav_path

@@ -5,7 +5,7 @@ from typing import Any, Dict
 from dash import html
 from dash.exceptions import PreventUpdate
 
-from components.state_utils import ensure_state
+from components.state_utils import ensure_state, serialise_state
 from services.photo_service import insert_photo_record, upload_to_storage
 from services.supabase_client import get_supabase_client
 
@@ -186,3 +186,177 @@ store_data keys: {list(store_data.keys()) if store_data else "None"}
         return html.Div(
             f"保存中にエラーが発生しました: {str(e)}", className="alert alert-danger"
         )
+
+
+def save_quick_registration_with_photo(store_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    クイック追加: 写真ありで保存する
+    - photo を保存し、product を作成する
+    - UI要素は返さず、純データのみ返す
+    """
+    state = ensure_state(store_data)
+    front_photo_state = state.get("front_photo", {})
+
+    has_photo = bool(front_photo_state.get("original_tmp_path")) or bool(
+        front_photo_state.get("content")
+    )
+    if not has_photo:
+        return {
+            "status": "business_error",
+            "message": "正面写真がありません。撮影またはアップロードしてください。",
+            "photo_id": None,
+            "product_name": None,
+            "state": serialise_state(state),
+        }
+
+    supabase = get_supabase_client()
+
+    photo_id = None
+    product_name = f"未設定_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    try:
+        file_bytes = None
+        content_type = front_photo_state.get("content_type", "image/jpeg")
+        original_tmp_path = front_photo_state.get("original_tmp_path")
+        display_content = front_photo_state.get("content")
+
+        # 画像バイトを取得
+        if original_tmp_path and os.path.exists(original_tmp_path):
+            with open(original_tmp_path, "rb") as f:
+                file_bytes = f.read()
+        else:
+            if display_content and "," in display_content:
+                content_string = display_content.split(",", 1)[1]
+                file_bytes = base64.b64decode(content_string)
+            else:
+                return {
+                    "status": "business_error",
+                    "message": "写真データが取得できませんでした。撮影をやり直してください。",
+                    "photo_id": None,
+                    "product_name": None,
+                    "state": serialise_state(state),
+                }
+
+        # photoレコード作成
+        photo_id = insert_photo_record(
+            supabase,
+            image_url="",
+            thumbnail_url="",
+            front_flag=1,
+        )
+
+        # ストレージアップロード
+        image_url = upload_to_storage(
+            supabase,
+            file_bytes,
+            f"photo_{photo_id}.jpg",
+            content_type,
+        )
+
+        if image_url and photo_id:
+            supabase.table("photo").update(
+                {
+                    "photo_high_resolution_url": image_url,
+                    "photo_thumbnail_url": image_url,
+                }
+            ).eq("photo_id", photo_id).execute()
+
+        # productレコード作成（バーコードがなくても登録可）
+        from services.photo_service import insert_product_record
+
+        insert_product_record(
+            supabase,
+            photo_id=photo_id,
+            barcode=state["barcode"].get("value") or "",
+            barcode_type=state["barcode"].get("type") or "UNKNOWN",
+            product_name=product_name,
+            product_group_name="",
+            works_series_name="",
+            title="",
+            character_name="",
+            purchase_price=None,
+            purchase_location="",
+            memo="",
+        )
+
+        return {
+            "status": "success",
+            "message": "写真を保存しました。",
+            "photo_id": photo_id,
+            "product_name": product_name,
+            "state": serialise_state(state),
+        }
+    except Exception as e:
+        return {
+            "status": "system_error",
+            "message": f"保存中にエラーが発生しました: {str(e)}",
+            "photo_id": photo_id,
+            "product_name": product_name,
+            "state": serialise_state(state),
+        }
+    finally:
+        try:
+            if "file_bytes" in locals():
+                del file_bytes
+            if original_tmp_path and os.path.exists(original_tmp_path):
+                os.remove(original_tmp_path)
+                state["front_photo"]["original_tmp_path"] = None
+        except Exception:
+            pass
+        gc.collect()
+
+
+def save_quick_registration_barcode_only(store_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    クイック追加: バーコードのみで保存する（photo_idは持たない）
+    - バーコードがなければ業務エラー
+    - UI要素は返さず、純データのみ返す
+    """
+    state = ensure_state(store_data)
+    barcode_value = state["barcode"].get("value")
+
+    if not barcode_value:
+        return {
+            "status": "business_error",
+            "message": "バーコードまたは正面写真のどちらかが必要です。",
+            "photo_id": None,
+            "product_name": None,
+            "state": serialise_state(state),
+        }
+
+    supabase = get_supabase_client()
+    product_name = f"未設定_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    try:
+        from services.photo_service import insert_product_record
+
+        insert_product_record(
+            supabase,
+            photo_id=None,
+            barcode=barcode_value,
+            barcode_type=state["barcode"].get("type") or "UNKNOWN",
+            product_name=product_name,
+            product_group_name="",
+            works_series_name="",
+            title="",
+            character_name="",
+            purchase_price=None,
+            purchase_location="",
+            memo="",
+        )
+
+        return {
+            "status": "success",
+            "message": "バーコードのみで登録しました。",
+            "photo_id": None,
+            "product_name": product_name,
+            "state": serialise_state(state),
+        }
+    except Exception as e:
+        return {
+            "status": "system_error",
+            "message": f"保存中にエラーが発生しました: {str(e)}",
+            "photo_id": None,
+            "product_name": product_name,
+            "state": serialise_state(state),
+        }

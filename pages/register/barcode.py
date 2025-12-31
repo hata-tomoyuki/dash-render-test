@@ -7,7 +7,10 @@ def render_barcode_page() -> html.Div:
     return html.Div(
         [
             html.Div(
-                [html.H1([html.I(className="bi bi-box-seam me-2"), "製品を登録する"])],
+                [
+                    html.Div(id="register-success-banner", className="mb-2"),
+                    html.H1([html.I(className="bi bi-box-seam me-2"), "製品を登録する"]),
+                ],
                 className="header",
             ),
             html.Section(

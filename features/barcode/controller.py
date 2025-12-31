@@ -126,6 +126,29 @@ def _update_tags(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def register_barcode_callbacks(app):
     @app.callback(
+        Output("register-success-banner", "children"),
+        Input("registration-store", "data"),
+        State("_pages_location", "pathname"),
+        prevent_initial_call="initial_duplicate",
+    )
+    def _consume_register_banner(store_data, pathname):
+        if pathname != "/register/barcode":
+            raise PreventUpdate
+
+        state = ensure_state(store_data)
+        meta = state.get("meta", {})
+        message = meta.get("last_save_message")
+        status = meta.get("last_save_status", "info")
+
+        if not message:
+            raise PreventUpdate
+
+        banner = html.Div(
+            message, className=f"alert alert-{'success' if status == 'success' else 'info'}"
+        )
+        return banner
+
+    @app.callback(
         [
             Output("registration-store", "data", allow_duplicate=True),
             Output("barcode-feedback", "children"),
