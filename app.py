@@ -10,9 +10,12 @@ from services.supabase_client import get_supabase_client
 
 # Load environment variables EARLY so services read correct .env (models, flags)
 try:
+    import os
     from dotenv import load_dotenv
 
-    load_dotenv()
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    dotenv_path = os.path.join(project_root, ".env")
+    load_dotenv(dotenv_path=dotenv_path, override=False)
     print("DEBUG: Early .env loaded before services imports")
 except Exception as _early_env_err:
     print(f"DEBUG: Early .env load skipped: {_early_env_err}")
@@ -29,9 +32,10 @@ supabase = get_supabase_client()
 # テーマ関連処理は components/theme_utils.py に移動
 
 
-def create_app() -> dash.Dash:
+def create_app(server=None) -> dash.Dash:
     app = dash.Dash(
         __name__,
+        server=server,
         suppress_callback_exceptions=True,
         use_pages=True,
         # allow_duplicate を使うコールバックがあるため initial_duplicate を指定
@@ -122,12 +126,10 @@ def create_app() -> dash.Dash:
     return app
 
 
-app = create_app()
-server = app.server
-
-
 if __name__ == "__main__":
     import os
 
+    app = create_app()
+    server = app.server
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)

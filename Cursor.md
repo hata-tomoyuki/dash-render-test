@@ -5,26 +5,28 @@
 - Dash Pages を使用し、`_pages_location.pathname` を更新してページ遷移する構成。`app.py` で `.env` を最初に読み込み、`create_app()` が `app` / `server` を生成（Gunicorn は `app:server` を起動）。
 - Supabase 未設定でも UI は起動するが、保存・ギャラリー・テーマ永続化は無効。
 
-## 起動手順（PowerShell）
+## 起動手順（PowerShell / ローカル開発）
 
-- 通常:
+- 事前確認: `.env` に **PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY / SUPABASE_SECRET_DEFAULT_KEY / DATABASE_URL / APP_BASE_URL** を設定
+- 通常（Flask+Dash 入口は `server.py`）:
   ```powershell
   cd C:\Users\ryone\Desktop\oshi-app
-  python app.py
+  python server.py
   ```
-- ログ付き強制起動（依頼時は必ずこれ）:
+- ログ付き強制起動（必要時）:
   ```powershell
   cd C:\Users\ryone\Desktop\oshi-app
   powershell -ExecutionPolicy Bypass -File .\start_with_logs.ps1
   ```
-  - 既存 python プロセス停止、UTF-8/アンバッファ、`.venv` 優先、`app_run.log` に保存。
+  - `start_with_logs.ps1` が `app.py` を指している場合は、`server.py` に読み替えて実行してください。
   - ログ確認: `Get-Content app_run.log -Tail 50`
-- ブラウザ: `http://127.0.0.1:8050`（Ctrl+Shift+R でハードリロード）
+- ブラウザ: **必ず `http://127.0.0.1:8050` に統一**（`localhost` と混在させない）。\n+ - 以後、リンクを踏む/ブックマークも含めて **127.0.0.1 側だけ** を使ってください。\n+ - 既にループしている場合は、`127.0.0.1` と `localhost` の両方の Cookie を削除してから再アクセスしてください。
 - 停止: `Ctrl+C` または `Stop-Process -Name python -ErrorAction SilentlyContinue`
 
 ## 環境変数
 
-- ローカルは `.env`（例: `SUPABASE_URL`, `SUPABASE_KEY`, `RAKUTEN_APP_ID`, `IO_INTELLIGENCE_API_KEY` など）。
+- ローカルは `.env`（例: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`, `SUPABASE_SECRET_DEFAULT_KEY`, `DATABASE_URL`, `RAKUTEN_APPLICATION_ID`, `IO_INTELLIGENCE_API_KEY` など）。
+- 互換性のため、当面は旧名 `SUPABASE_URL` / `SUPABASE_KEY` でも動作します（推奨は `PUBLIC_SUPABASE_*`）。
 - `.dockerignore` により `.env` はイメージに入らない。Render では Environment Variables で同名を必ず設定。
 
 ## 登録 3 ステップ仕様（正しい挙動）
