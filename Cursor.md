@@ -5,7 +5,7 @@
 - Dash Pages を使用し、`_pages_location.pathname` を更新してページ遷移する構成。`app.py` で `.env` を最初に読み込み、`create_app()` が `app` / `server` を生成（Gunicorn は `app:server` を起動）。
 - Supabase 未設定でも UI は起動するが、保存・ギャラリー・テーマ永続化は無効。
 
-## 起動手順（PowerShell / ローカル開発）
+## 起動手順（PowerShell / ローカル開発・認証動作確認）
 
 - 事前確認: `.env` に **PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY / SUPABASE_SECRET_DEFAULT_KEY / DATABASE_URL / APP_BASE_URL** を設定
 - 通常（Flask+Dash 入口は `server.py`）:
@@ -20,7 +20,7 @@
   ```
   - `start_with_logs.ps1` が `app.py` を指している場合は、`server.py` に読み替えて実行してください。
   - ログ確認: `Get-Content app_run.log -Tail 50`
-- ブラウザ: **必ず `http://127.0.0.1:8050` に統一**（`localhost` と混在させない）。\n+ - 以後、リンクを踏む/ブックマークも含めて **127.0.0.1 側だけ** を使ってください。\n+ - 既にループしている場合は、`127.0.0.1` と `localhost` の両方の Cookie を削除してから再アクセスしてください。
+- ブラウザ: **必ず `http://127.0.0.1:8050` に統一**（`localhost` と混在させない）。\n+ - 以後、リンクを踏む/ブックマークも含めて **127.0.0.1 側だけ** を使ってください。\n+ - 既にループしている場合は、`127.0.0.1` と `localhost` の両方の Cookie を削除してから再アクセスしてください。\n+- 認証確認フロー: `http://127.0.0.1:8050/login` を開く → ボタンで Google ログイン → `/auth/callback?code=...` に戻り、Cookie がセットされトップへ遷移することを確認（bad_oauth_state 時は画面にエラーを表示し、自動再試行しない）。
 - 停止: `Ctrl+C` または `Stop-Process -Name python -ErrorAction SilentlyContinue`
 
 ## 環境変数

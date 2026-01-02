@@ -4,12 +4,15 @@ Flask エントリポイント。Supabase Auth (Google OAuth) を用い、
 JWT を HttpOnly Cookie で保持し、入口で検証して Dash を保護する。
 """
 
+import base64
+import hashlib
 import os
 import secrets
 import urllib.parse
 from urllib.parse import urlparse
 from typing import Optional
 
+import requests
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -42,6 +45,7 @@ COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
 AUTH_COOKIE = "sb-access-token"
 REFRESH_COOKIE = "sb-refresh-token"
 STATE_COOKIE = "sb-oauth-state"
+CODE_VERIFIER_COOKIE = "sb-pkce-verifier"
 
 
 def _cookie_kwargs(http_only: bool = True, max_age: Optional[int] = None) -> dict:
@@ -86,6 +90,7 @@ def _build_authorize_url(state: str, base_url: str) -> str:
         "provider": "google",
         "redirect_to": redirect_uri,
         "state": state,
+        # PKCE は /auth/login で付与する（code_challenge）
     }
     return f"{SUPABASE_URL}/auth/v1/authorize?{urllib.parse.urlencode(params)}"
 
@@ -142,6 +147,29 @@ flask_app = Flask(__name__)
 
 @flask_app.before_request
 def _require_auth():
+    # OAuth state エラー時は自動再試行させず、その場で説明を返す
+    if request.args.get("error_code") == "bad_oauth_state":
+        return render_template_string(
+            """
+            <!doctype html>
+            <html>
+              <head><meta charset="utf-8"><title>Auth error</title></head>
+              <body style="font-family:sans-serif; max-width:640px; margin:40px auto;">
+                <h2>ログインに失敗しました</h2>
+                <p>原因: OAuth state が一致しませんでした（bad_oauth_state）。</p>
+                <ul>
+                  <li>複数タブで同時にログインを開始した</li>
+                  <li>ブラウザ拡張/プライバシー設定で Cookie がブロックされた</li>
+                  <li>前回のログイン途中で戻る/更新した</li>
+                </ul>
+                <p>対処: Cookie を削除し、タブを1つにして再試行してください。</p>
+                <p><a href="/login">ログイン画面へ戻る</a></p>
+              </body>
+            </html>
+            """,
+            400,
+        )
+
     if _is_public_path(request.path):
         return None
 
@@ -163,7 +191,50 @@ def _require_auth():
 
 @flask_app.get("/login")
 def login_page():
-    return redirect("/auth/login")
+    return render_template_string(
+        """
+        <!doctype html>
+        <html>
+          <head><meta charset="utf-8"><title>Login</title></head>
+          <body style="font-family:sans-serif; max-width:520px; margin:40px auto;">
+            <h2>ログイン</h2>
+            <p>Googleでログインしてください。</p>
+            <a href="/auth/login"
+               style="padding:10px 16px; background:#0070f3; color:#fff; text-decoration:none; border-radius:4px;">
+               Googleでログイン
+            </a>
+          </body>
+        </html>
+        """
+    )
+
+
+def _pkce_verifier() -> str:
+    return secrets.token_urlsafe(64)
+
+
+def _pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).decode("utf-8").rstrip("=")
+
+
+def _exchange_code_for_session(code: str, code_verifier: str) -> dict:
+    """
+    Supabase Auth の token エンドポイントで code を交換（PKCE）。
+    """
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=pkce"
+    headers = {
+        "apikey": PUBLISHABLE_KEY,
+        "Content-Type": "application/json",
+    }
+    resp = requests.post(
+        url,
+        json={"auth_code": code, "code_verifier": code_verifier},
+        headers=headers,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 @flask_app.get("/auth/login")
@@ -181,17 +252,23 @@ def auth_login():
             400,
         )
     state = secrets.token_urlsafe(16)
+    verifier = _pkce_verifier()
+    challenge = _pkce_challenge(verifier)
+
+    # authorize URL に code_challenge を付与
     url = _build_authorize_url(state, base_url)
+    url = f"{url}&code_challenge={challenge}&code_challenge_method=S256"
+
     resp = make_response(redirect(url))
-    # state は JS で参照するため HttpOnly にはしない
+    # state は JS に見えても問題ないが、改竄防止のため HttpOnly=False を維持
     resp.set_cookie(STATE_COOKIE, state, **_cookie_kwargs(http_only=False))
+    # code_verifier は秘密なので HttpOnly
+    resp.set_cookie(CODE_VERIFIER_COOKIE, verifier, **_cookie_kwargs(http_only=True))
     return resp
 
 
 @flask_app.get("/auth/callback")
 def auth_callback():
-    # トークンは hash フラグメントで返るため、サーバでは読めない。
-    # JS で取得し /auth/session に POST する。
     try:
         _ = _get_base_url()
     except Exception as exc:
@@ -199,55 +276,41 @@ def auth_callback():
             f"ローカルURL不一致です。ブラウザは APP_BASE_URL に統一してください。（{exc}）",
             400,
         )
-    html = (
-        """
-    <!doctype html>
-    <html>
-    <head><meta charset="utf-8"><title>Signing in...</title></head>
-    <body>Signing in...</body>
-    <script>
-      const params = new URLSearchParams(window.location.hash.slice(1));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const expiresIn = Number(params.get('expires_in') || '3600');
-      const state = params.get('state');
-      const cookies = Object.fromEntries(document.cookie.split('; ').map(c => c.split('=')));
-      const expectedState = cookies['"""
-        + STATE_COOKIE
-        + """'];
-      if (!accessToken) {
-        document.body.innerText = 'No access token returned.';
-      } else if (state && expectedState && state !== expectedState) {
-        document.body.innerText = 'State mismatch. Please retry login.';
-      } else {
-        fetch('/auth/session', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          credentials: 'include',
-          body: JSON.stringify({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            expires_in: expiresIn
-          })
-        }).then(async (res) => {
-          if (!res.ok) {
-            const t = await res.text();
-            document.body.innerText = 'Failed to set session: ' + t;
-            return;
-          }
-          document.cookie = '"""
-        + STATE_COOKIE
-        + """=; Max-Age=0; path=/';
-          window.location.replace('/');
-        }).catch(() => {
-          document.body.innerText = 'Failed to set session.';
-        });
-      }
-    </script>
-    </html>
-    """
+    code = request.args.get("code")
+    if not code:
+        return (
+            "No authorization code returned. ブラウザのCookieや拡張機能を確認してください。",
+            400,
+        )
+
+    verifier = request.cookies.get(CODE_VERIFIER_COOKIE)
+    state_cookie = request.cookies.get(STATE_COOKIE)
+    state_param = request.args.get("state")
+
+    if not verifier:
+        return "Missing PKCE verifier cookie.", 400
+    if state_param and state_cookie and state_param != state_cookie:
+        return "State mismatch. Please retry login.", 400
+
+    try:
+        session = _exchange_code_for_session(code, verifier)
+    except Exception as exc:  # pragma: no cover
+        return f"Failed to exchange code: {exc}", 400
+
+    access_token = session.get("access_token")
+    refresh_token = session.get("refresh_token")
+    expires_in = session.get("expires_in")
+    if not access_token:
+        return f"No access_token in session response: {session}", 400
+
+    resp = make_response(redirect("/"))
+    _set_session_cookies(resp, access_token, refresh_token, expires_in)
+    # state / verifier を破棄
+    resp.set_cookie(STATE_COOKIE, "", **_cookie_kwargs(http_only=False, max_age=0))
+    resp.set_cookie(
+        CODE_VERIFIER_COOKIE, "", **_cookie_kwargs(http_only=True, max_age=0)
     )
-    return html
+    return resp
 
 
 @flask_app.post("/auth/session")
