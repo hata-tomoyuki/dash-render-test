@@ -24,8 +24,12 @@
   - 以後、リンクを踏む/ブックマークも含めて **127.0.0.1 側だけ** を使ってください。
   - 既にループしている場合は、`127.0.0.1` と `localhost` の両方の Cookie を削除してから再アクセスしてください。
   - 認証確認フロー: `http://127.0.0.1:8050/login` を開く → ボタンで Google ログイン → `/auth/callback?code=...` に戻り、Cookie がセットされトップへ遷移することを確認。
-    - state / PKCE / redirect_to は当ドメインの Cookie に保存し、/auth/callback で照合→交換→即削除。Supabase 側の state Cookie 依存ではない。
+    - state / PKCE / redirect_to は当ドメインの Cookie に保存し、/auth/callback で照合 → 交換 → 即削除。Supabase 側の state Cookie 依存ではない。
     - `bad_oauth_state` や state mismatch 表示時は、Cookie を削除して単一タブで再試行する。
+  - メール/パスワード認証:
+    - サインイン: `/auth/email/signin` に email/password を POST（ログイン画面のフォームで実行）。成功すると HttpOnly Cookie にセッションが入る。
+    - サインアップ: `/auth/email/signup` に email/password を POST。メール確認が完了するまでセッションは発行されない。確認後にサインインを実施。
+    - パスワードリセット: `/auth/email/reset` に email を POST。受信メールのリンクから再設定。
 - 停止: `Ctrl+C` または `Stop-Process -Name python -ErrorAction SilentlyContinue`
 
 ## 環境変数

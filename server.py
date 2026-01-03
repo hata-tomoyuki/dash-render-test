@@ -96,6 +96,17 @@ def _build_authorize_url(state: str, base_url: str) -> str:
     return f"{SUPABASE_URL}/auth/v1/authorize?{urllib.parse.urlencode(params)}"
 
 
+def _supabase_auth_post(path: str, payload: dict) -> requests.Response:
+    """Supabase Auth REST API 呼び出し（POST）。"""
+    url = f"{SUPABASE_URL}{path}"
+    headers = {
+        "apikey": PUBLISHABLE_KEY,
+        "Content-Type": "application/json",
+    }
+    resp = requests.post(url, json=payload, headers=headers, timeout=10)
+    return resp
+
+
 def _set_session_cookies(
     resp, access_token: str, refresh_token: Optional[str], expires_in: Optional[int]
 ) -> None:
@@ -131,6 +142,9 @@ def _is_public_path(path: str) -> bool:
             "/auth/callback",
             "/auth/session",
             "/auth/logout",
+            "/auth/email/signin",
+            "/auth/email/signup",
+            "/auth/email/reset",
             "/oauth/consent",
             "/assets/",
             "/static/",
@@ -230,11 +244,109 @@ def login_page():
           <head><meta charset="utf-8"><title>Login</title></head>
           <body style="font-family:sans-serif; max-width:520px; margin:40px auto;">
             <h2>ログイン</h2>
-            <p>Googleでログインしてください。</p>
-            <a href="/auth/login"
-               style="padding:10px 16px; background:#0070f3; color:#fff; text-decoration:none; border-radius:4px;">
-               Googleでログイン
-            </a>
+            <p>Google または メール/パスワードでログインできます。</p>
+
+            <div style="margin:16px 0;">
+              <a href="/auth/login"
+                 style="padding:10px 16px; background:#0070f3; color:#fff; text-decoration:none; border-radius:4px; display:inline-block;">
+                 Googleでログイン
+              </a>
+            </div>
+
+            <hr style="margin:24px 0;">
+
+            <h3 style="margin-bottom:8px;">メールでログイン</h3>
+            <form id="signin-form" style="display:flex; flex-direction:column; gap:8px; max-width:360px;">
+              <label>メールアドレス<input type="email" name="email" required style="width:100%; padding:6px;"></label>
+              <label>パスワード<input type="password" name="password" required style="width:100%; padding:6px;"></label>
+              <button type="submit" style="padding:10px; background:#0070f3; color:#fff; border:none; border-radius:4px;">メールでログイン</button>
+            </form>
+            <div id="signin-msg" style="margin-top:8px; min-height:20px; color:#d00;"></div>
+
+            <div style="margin-top:24px;">
+              <h4 style="margin-bottom:6px;">新規登録</h4>
+              <form id="signup-form" style="display:flex; flex-direction:column; gap:8px; max-width:360px;">
+                <label>メールアドレス<input type="email" name="email" required style="width:100%; padding:6px;"></label>
+                <label>パスワード<input type="password" name="password" required style="width:100%; padding:6px;"></label>
+                <button type="submit" style="padding:10px; background:#0a7; color:#fff; border:none; border-radius:4px;">登録して確認メールを送る</button>
+              </form>
+              <div id="signup-msg" style="margin-top:8px; min-height:20px; color:#d00;"></div>
+            </div>
+
+            <div style="margin-top:24px;">
+              <h4 style="margin-bottom:6px;">パスワードリセット</h4>
+              <form id="reset-form" style="display:flex; flex-direction:column; gap:8px; max-width:360px;">
+                <label>メールアドレス<input type="email" name="email" required style="width:100%; padding:6px;"></label>
+                <button type="submit" style="padding:10px; background:#555; color:#fff; border:none; border-radius:4px;">リセットメールを送信</button>
+              </form>
+              <div id="reset-msg" style="margin-top:8px; min-height:20px; color:#d00;"></div>
+            </div>
+
+            <script>
+              const postJson = async (url, body) => {
+                const res = await fetch(url, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify(body || {})
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  const msg = data.message || data.error || (data.detail && data.detail.message) || "エラーが発生しました";
+                  throw new Error(msg);
+                }
+                return data;
+              };
+
+              const setMsg = (id, msg, ok) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.style.color = ok ? "#0a7" : "#d00";
+                el.textContent = msg || "";
+              };
+
+              document.getElementById("signin-form").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                setMsg("signin-msg", "");
+                const form = e.target;
+                const email = form.email.value.trim();
+                const password = form.password.value;
+                try {
+                  await postJson("/auth/email/signin", { email, password });
+                  setMsg("signin-msg", "ログイン成功しました。トップへ遷移します…", true);
+                  window.location.href = "/";
+                } catch (err) {
+                  setMsg("signin-msg", err.message);
+                }
+              });
+
+              document.getElementById("signup-form").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                setMsg("signup-msg", "");
+                const form = e.target;
+                const email = form.email.value.trim();
+                const password = form.password.value;
+                try {
+                  const res = await postJson("/auth/email/signup", { email, password });
+                  setMsg("signup-msg", res.message || "確認メールを送信しました。受信箱を確認してください。", true);
+                } catch (err) {
+                  setMsg("signup-msg", err.message);
+                }
+              });
+
+              document.getElementById("reset-form").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                setMsg("reset-msg", "");
+                const form = e.target;
+                const email = form.email.value.trim();
+                try {
+                  const res = await postJson("/auth/email/reset", { email });
+                  setMsg("reset-msg", res.message || "リセットメールを送信しました。", true);
+                } catch (err) {
+                  setMsg("reset-msg", err.message);
+                }
+              });
+            </script>
           </body>
         </html>
         """
@@ -385,6 +497,140 @@ def auth_session():
     resp.set_cookie(STATE_COOKIE, "", **_cookie_kwargs(http_only=False, max_age=0))
     resp.set_cookie(REDIRECT_COOKIE, "", **_cookie_kwargs(http_only=False, max_age=0))
     return resp
+
+
+@flask_app.post("/auth/email/signin")
+def auth_email_signin():
+    """メール/パスワードでサインインし、HttpOnly Cookie にセッションを設定する。"""
+    try:
+        _ = _get_base_url()
+    except Exception as exc:
+        return (
+            jsonify({"error": "invalid_host", "message": str(exc)}),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+    if not email or not password:
+        return jsonify({"error": "validation", "message": "email と password は必須です"}), 400
+
+    try:
+        resp = _supabase_auth_post(
+            "/auth/v1/token?grant_type=password",
+            {"email": email, "password": password},
+        )
+    except Exception as exc:  # システムエラー
+        return jsonify({"error": "server_error", "message": str(exc)}), 500
+
+    if resp.status_code >= 400:
+        # 業務エラーとして 400 を返却（例: invalid_credentials）
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": resp.text}
+        return jsonify({"error": "auth_failed", "detail": detail}), 400
+
+    session = resp.json()
+    access_token = session.get("access_token")
+    refresh_token = session.get("refresh_token")
+    expires_in = session.get("expires_in")
+    if not access_token:
+        return (
+            jsonify({"error": "auth_failed", "detail": session}),
+            400,
+        )
+
+    resp_out = make_response(jsonify({"ok": True}))
+    _set_session_cookies(resp_out, access_token, refresh_token, expires_in)
+    # state / redirect をクリア（念のため）
+    resp_out.set_cookie(STATE_COOKIE, "", **_cookie_kwargs(http_only=False, max_age=0))
+    resp_out.set_cookie(
+        CODE_VERIFIER_COOKIE, "", **_cookie_kwargs(http_only=True, max_age=0)
+    )
+    resp_out.set_cookie(REDIRECT_COOKIE, "", **_cookie_kwargs(http_only=False, max_age=0))
+    return resp_out
+
+
+@flask_app.post("/auth/email/signup")
+def auth_email_signup():
+    """メール/パスワードでサインアップ。メール確認が完了するまでセッションは発行しない。"""
+    try:
+        base_url = _get_base_url()
+    except Exception as exc:
+        return (
+            jsonify({"error": "invalid_host", "message": str(exc)}),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+    if not email or not password:
+        return jsonify({"error": "validation", "message": "email と password は必須です"}), 400
+
+    payload = {
+        "email": email,
+        "password": password,
+        "data": {},
+        # 確認メール後のリダイレクト先（Site URL と整合すること）
+        "redirect_to": f"{base_url}/login",
+    }
+    try:
+        resp = _supabase_auth_post("/auth/v1/signup", payload)
+    except Exception as exc:  # システムエラー
+        return jsonify({"error": "server_error", "message": str(exc)}), 500
+
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": resp.text}
+        return jsonify({"error": "signup_failed", "detail": detail}), 400
+
+    # サインアップ時点ではメール確認を要求し、セッションは設定しない
+    return jsonify(
+        {
+            "ok": True,
+            "message": "サインアップしました。メールの確認リンクを開いてからサインインしてください。",
+        }
+    )
+
+
+@flask_app.post("/auth/email/reset")
+def auth_email_reset():
+    """パスワードリセットメールを送信する。"""
+    try:
+        base_url = _get_base_url()
+    except Exception as exc:
+        return (
+            jsonify({"error": "invalid_host", "message": str(exc)}),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    if not email:
+        return jsonify({"error": "validation", "message": "email は必須です"}), 400
+
+    payload = {
+        "email": email,
+        "redirect_to": f"{base_url}/login",
+    }
+    try:
+        resp = _supabase_auth_post("/auth/v1/recover", payload)
+    except Exception as exc:  # システムエラー
+        return jsonify({"error": "server_error", "message": str(exc)}), 500
+
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": resp.text}
+        return jsonify({"error": "reset_failed", "detail": detail}), 400
+
+    return jsonify({"ok": True, "message": "パスワードリセット用メールを送信しました。"})
 
 
 @flask_app.post("/auth/logout")
