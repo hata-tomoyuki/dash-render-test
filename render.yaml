@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: oshi-app
+    env: python
+    plan: starter  # または free, standard, pro
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --worker-class gthread
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        value: 8050
+      # 以下の環境変数はRenderのダッシュボードで設定してください
+      # - key: SUPABASE_URL
+      #   sync: false
+      # - key: SUPABASE_KEY
+      #   sync: false
+      # - key: IO_INTELLIGENCE_API_KEY
+      #   sync: false
+      # - key: RAKUTEN_APPLICATION_ID
+      #   sync: false
+      # - key: APP_BASE_URL
+      #   sync: false
+

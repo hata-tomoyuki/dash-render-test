@@ -33,23 +33,27 @@ supabase = get_supabase_client()
 
 
 def create_app(server=None) -> dash.Dash:
-    app = dash.Dash(
-        __name__,
-        server=server,
-        suppress_callback_exceptions=True,
-        use_pages=True,
+    # serverがNoneの場合はパラメータを省略（Dashが自動でFlaskアプリを作成）
+    dash_kwargs = {
+        "suppress_callback_exceptions": True,
+        "use_pages": True,
         # allow_duplicate を使うコールバックがあるため initial_duplicate を指定
-        prevent_initial_callbacks="initial_duplicate",  # type: ignore[arg-type]
-        meta_tags=[
+        "prevent_initial_callbacks": "initial_duplicate",  # type: ignore[arg-type]
+        "meta_tags": [
             {
                 "name": "viewport",
                 "content": "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
             }
         ],
-        external_stylesheets=[
+        "external_stylesheets": [
             "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
         ],
-    )
+    }
+    # serverが指定されている場合のみ追加
+    if server is not None:
+        dash_kwargs["server"] = server
+
+    app = dash.Dash(__name__, **dash_kwargs)
     app.title = "推し活グッズ管理"
 
     # 機能別コールバック登録
