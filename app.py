@@ -1,16 +1,18 @@
-import dash
-from dash import Input, Output, State, html, dcc, no_update
-from dash.exceptions import PreventUpdate
 from copy import deepcopy
 
-from components.theme_utils import load_theme, get_bootswatch_css
+import dash
+from dash import Input, Output, State, dcc, html, no_update
+from dash.exceptions import PreventUpdate
+
 from components.layout import _build_navigation
 from components.state_utils import empty_registration_state
+from components.theme_utils import get_bootswatch_css, load_theme
 from services.supabase_client import get_supabase_client
 
 # Load environment variables EARLY so services read correct .env (models, flags)
 try:
     import os
+
     from dotenv import load_dotenv
 
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -57,13 +59,13 @@ def create_app(server=None) -> dash.Dash:
     app.title = "推し活グッズ管理"
 
     # 機能別コールバック登録
+    from components.theme_utils import register_theme_callbacks
     from features.barcode.controller import register_barcode_callbacks
     from features.photo.controller import (
         register_photo_callbacks,
         register_x_share_callbacks,
     )
     from features.review.controller import register_review_callbacks
-    from components.theme_utils import register_theme_callbacks
 
     register_barcode_callbacks(app)
     register_photo_callbacks(app)
